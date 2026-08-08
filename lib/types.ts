@@ -17,7 +17,7 @@ export interface Transaction {
   category_id: number | null;
   paid_by: string;
   receipt_url: string | null;
-  source: "manual" | "ai_receipt";
+  source: "manual" | "ai_receipt" | "ai_email";
 }
 
 // Forma de un movimiento tal como lo devuelve la IA antes de guardarlo

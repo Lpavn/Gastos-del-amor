@@ -29,6 +29,7 @@ export default function TransactionList({
                   {t.description || cat?.name || "Movimiento"}
                 </p>
                 <p className="text-xs text-gray-400">
+                  {t.source === "ai_email" && <span title="Cargado por mail">📧 </span>}
                   {new Date(t.date + "T00:00:00").toLocaleDateString("es-AR", {
                     day: "2-digit",
                     month: "short",

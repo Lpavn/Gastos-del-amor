@@ -40,7 +40,7 @@ create table if not exists transactions (
   category_id integer references categories(id),
   paid_by text not null,              -- nombre de quién pagó / aportó (texto libre, ver env NEXT_PUBLIC_PERSON_1_NAME / 2)
   receipt_url text,                   -- url pública en el bucket "receipts" si vino de una foto
-  source text not null default 'manual' check (source in ('manual', 'ai_receipt'))
+  source text not null default 'manual' check (source in ('manual', 'ai_receipt', 'ai_email'))
 );
 
 create index if not exists transactions_date_idx on transactions (date);
