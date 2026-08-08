@@ -27,9 +27,15 @@ pantalla de inicio del celular y funciona como una app normal.
    movimientos.
 4. Andá a **Storage → New bucket**. Nombre: `receipts`. Marcá la opción
    **Public bucket** (para que las fotos se puedan ver desde la app). Create.
-5. Andá a **Settings → API**. Vas a necesitar dos valores para el paso 3:
-   - **Project URL** → va en `NEXT_PUBLIC_SUPABASE_URL`
-   - **anon public key** → va en `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+5. Andá a **Settings → API Keys**. Vas a necesitar dos valores para el paso 3:
+   - **Project URL** (pestaña General, o arriba de esta misma página) → va en `NEXT_PUBLIC_SUPABASE_URL`
+   - **Publishable key** (empieza con `sb_publishable_...`, es la clave pública
+     para el navegador) → va en `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - Ojo: NO uses la de "Secret keys" (`sb_secret_...`), esa es privada y no
+     la necesitás acá.
+   - *(Si tu proyecto es viejo y ves "anon" / "service_role" en vez de
+     "Publishable" / "Secret", usá la pestaña "Legacy anon, service_role API
+     keys" y tomá la `anon` — funciona igual.)*
 
 ## Paso 2 — Conseguir la API key de Google Gemini (gratis)
 

@@ -7,16 +7,69 @@ import { Category, DraftTransaction } from "@/lib/types";
 import { PERSON_1, PERSON_2, getCurrentPerson } from "@/lib/person";
 import ReviewTable from "@/components/ReviewTable";
 
-function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+// Las fotos que salen de la cámara del celular suelen pesar varios MB, y
+// Vercel rechaza (413 "Request Entity Too Large") cualquier request de más
+// de ~4.5MB. Achicamos la imagen en el propio celular antes de mandarla:
+// igual se lee perfecto el texto de un ticket con 1600px de lado más largo.
+function compressImage(
+  file: File,
+  maxDimension = 1600,
+  quality = 0.75
+): Promise<{ file: File; base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string; // data:<mime>;base64,<data>
-      const [, base64] = result.split(",");
-      resolve({ base64, mimeType: file.type || "image/jpeg" });
+    const objectUrl = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("No se pudo procesar la imagen."));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(objectUrl);
+          if (!blob) {
+            reject(new Error("No se pudo comprimir la imagen."));
+            return;
+          }
+          const compressedFile = new File(
+            [blob],
+            file.name.replace(/\.\w+$/, "") + ".jpg",
+            { type: "image/jpeg" }
+          );
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string; // data:<mime>;base64,<data>
+            const [, base64] = result.split(",");
+            resolve({ file: compressedFile, base64, mimeType: "image/jpeg" });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        },
+        "image/jpeg",
+        quality
+      );
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("No se pudo abrir la imagen."));
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -54,22 +107,35 @@ export default function AddPage() {
   }, []);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
+    const original = e.target.files?.[0];
+    if (!original) return;
     setStatus("parsing");
     setErrorMsg("");
     setDrafts([]);
+    setPhotoFile(null);
+    setPhotoPreview(null);
 
     try {
-      const { base64, mimeType } = await fileToBase64(file);
+      const { file, base64, mimeType } = await compressImage(original);
+      setPhotoFile(file);
+      setPhotoPreview(URL.createObjectURL(file));
+
       const res = await fetch("/api/parse-receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64, mimeType }),
       });
-      const data = await res.json();
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(
+          res.status === 413
+            ? "La foto sigue siendo muy pesada. Probá sacarla de nuevo o con menos zoom."
+            : "Hubo un problema de conexión al procesar la foto. Probá de nuevo."
+        );
+      }
       if (!res.ok) throw new Error(data.error || "No se pudo leer la imagen.");
 
       const current = getCurrentPerson() || PERSON_1;
@@ -200,7 +266,6 @@ export default function AddPage() {
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={handleFile}
           />
