@@ -3,3 +3,7 @@ node_modules
 .env.local
 .env*.local
 .DS_Store
+tsconfig.tsbuildinfo
+
+# Proyecto aparte (demo de menú digital), no forma parte de esta app.
+menu-digital-demo/
