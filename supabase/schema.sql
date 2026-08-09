@@ -40,11 +40,22 @@ create table if not exists transactions (
   category_id integer references categories(id),
   paid_by text not null,              -- nombre de quién pagó / aportó (texto libre, ver env NEXT_PUBLIC_PERSON_1_NAME / 2)
   receipt_url text,                   -- url pública en el bucket "receipts" si vino de una foto
-  source text not null default 'manual' check (source in ('manual', 'ai_receipt', 'ai_email'))
+  source text not null default 'manual' check (source in ('manual', 'ai_receipt', 'ai_email')),
+  merchant_key text                   -- alias/comercio tal cual lo extrae la IA de mails, para autocategorizar (ver category_rules)
 );
 
 create index if not exists transactions_date_idx on transactions (date);
 create index if not exists transactions_category_idx on transactions (category_id);
+
+-- Reglas de autocategorización: "todo movimiento cuyo alias/comercio sea X
+-- va siempre a la categoría Y". Se cargan desde la app (editar un movimiento
+-- > "Recordar esta categoría") y las usa /api/import-email en cada mail nuevo.
+create table if not exists category_rules (
+  id serial primary key,
+  match_key text not null unique,     -- alias/comercio normalizado (minúsculas, sin espacios de más)
+  category_id integer not null references categories(id),
+  created_at timestamptz not null default now()
+);
 
 -- NOTA DE SEGURIDAD:
 -- Esta app está pensada para uso privado entre dos personas y NO usa autenticación

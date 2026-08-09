@@ -6,7 +6,7 @@ import TransactionList from "@/components/TransactionList";
 import Link from "next/link";
 
 export default function DashboardPage() {
-  const { transactions, categoryById, loading } = useTransactions();
+  const { transactions, categories, categoryById, loading, refresh } = useTransactions();
 
   return (
     <div className="px-4 pt-6">
@@ -26,7 +26,12 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-2 rounded-2xl bg-white px-4 shadow-sm">
-        <TransactionList transactions={transactions.slice(0, 15)} categoryById={categoryById} />
+        <TransactionList
+          transactions={transactions.slice(0, 15)}
+          categoryById={categoryById}
+          categories={categories}
+          onChanged={refresh}
+        />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { DEFAULT_CATEGORIES } from "@/lib/categories";
+import { normalizeMerchantKey } from "@/lib/merchantKey";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -50,8 +51,13 @@ const RESPONSE_SCHEMA = {
             enum: categoryNames,
             description: "La categoría más adecuada de la lista permitida.",
           },
+          merchant_key: {
+            type: Type.STRING,
+            description:
+              "El nombre del comercio o el alias/destinatario de la transferencia, copiado LITERAL del mail (no lo resumas ni lo traduzcas). Por ejemplo el valor exacto que aparece después de 'Comercio:' o 'Alias:' o el nombre de la persona/cuenta destino. Si el mail no lo menciona, dejalo vacío.",
+          },
         },
-        required: ["date", "type", "amount", "description", "category_name"],
+        required: ["date", "type", "amount", "description", "category_name", "merchant_key"],
       },
     },
   },
@@ -147,15 +153,35 @@ export async function POST(req: NextRequest) {
     const categoryIdFor = (name: string) =>
       categories?.find((c) => c.name === name)?.id ?? null;
 
-    const rows = parsed.transactions.map((t: any) => ({
-      date: t.date,
-      type: t.type,
-      amount: t.amount,
-      description: t.description,
-      category_id: categoryIdFor(t.category_name),
-      paid_by: paidBy,
-      source: "ai_email" as const,
-    }));
+    // Reglas manuales: "todo movimiento con este alias/comercio va siempre a
+    // esta categoría" (se cargan editando un movimiento en la app). Si el
+    // mail matchea una regla, pisa lo que haya decidido la IA.
+    const { data: rules, error: rulesError } = await supabase
+      .from("category_rules")
+      .select("match_key, category_id");
+    if (rulesError) {
+      return NextResponse.json({ error: rulesError.message }, { status: 500 });
+    }
+    const categoryIdForRule = (merchantKey: string) => {
+      const normalized = normalizeMerchantKey(merchantKey);
+      if (!normalized) return null;
+      return rules?.find((r) => r.match_key === normalized)?.category_id ?? null;
+    };
+
+    const rows = parsed.transactions.map((t: any) => {
+      const merchantKey: string = t.merchant_key || "";
+      const ruleCategoryId = categoryIdForRule(merchantKey);
+      return {
+        date: t.date,
+        type: t.type,
+        amount: t.amount,
+        description: t.description,
+        category_id: ruleCategoryId ?? categoryIdFor(t.category_name),
+        paid_by: paidBy,
+        source: "ai_email" as const,
+        merchant_key: normalizeMerchantKey(merchantKey) || null,
+      };
+    });
 
     const { error } = await supabase.from("transactions").insert(rows);
     if (error) {

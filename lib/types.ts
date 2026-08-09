@@ -18,6 +18,16 @@ export interface Transaction {
   paid_by: string;
   receipt_url: string | null;
   source: "manual" | "ai_receipt" | "ai_email";
+  merchant_key: string | null; // alias/comercio tal cual lo extrajo la IA del mail (para autocategorizar)
+}
+
+// Regla "este alias/comercio siempre va a esta categoría", usada por
+// /api/import-email para no volver a caer en "Otros" en mails repetidos.
+export interface CategoryRule {
+  id: number;
+  match_key: string;
+  category_id: number;
+  created_at: string;
 }
 
 // Forma de un movimiento tal como lo devuelve la IA antes de guardarlo

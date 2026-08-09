@@ -199,6 +199,25 @@ todas.
 **Si ya habías corrido `supabase/schema.sql` antes de agregar esto**, corré
 también `supabase/migration_email_auto.sql` en el SQL Editor de Supabase.
 
+### Corregir la categoría para siempre (reglas por alias/comercio)
+
+Cuando un mail se carga solo, a veces la IA no reconoce el comercio o el
+alias de una transferencia y lo manda a "Otros". Para que no vuelva a pasar
+con esa misma cuenta/alias:
+
+1. En la app, tocá ese movimiento para abrir el editor.
+2. Fijate el campo **"Alias / comercio"**: ya viene completado con lo que la
+   IA detectó en el mail (por ejemplo el alias de una transferencia o el
+   nombre del comercio). Corregilo si hace falta.
+3. Elegí la categoría correcta y tildá **"Recordar esta categoría para todos
+   los movimientos con este alias/comercio"** → Guardar cambios.
+
+De ahí en más, cualquier mail nuevo que mencione ese mismo alias/comercio se
+va a cargar directo con esa categoría, sin pasar por "Otros".
+
+**Si ya habías corrido `supabase/schema.sql` antes de agregar esto**, corré
+también `supabase/migration_category_rules.sql` en el SQL Editor de Supabase.
+
 ## Si la foto con IA deja de funcionar (error "model ... is no longer available")
 
 Google discontinúa versiones viejas de Gemini de vez en cuando. Si un día ves
