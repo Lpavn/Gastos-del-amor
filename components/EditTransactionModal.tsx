@@ -25,7 +25,11 @@ export default function EditTransactionModal({
     category_id: transaction.category_id,
     paid_by: transaction.paid_by,
   });
-  const [merchantKey, setMerchantKey] = useState(transaction.merchant_key || "");
+  // El alias/comercio no se edita a mano: es el que trajo el mail automático.
+  // Si un movimiento no tiene uno (carga manual, o la IA no lo detectó), no
+  // hay con qué matchear mails futuros y no se puede armar una regla.
+  const merchantKey = transaction.merchant_key || "";
+  const hasMerchantKey = !!normalizeMerchantKey(merchantKey);
   const [rememberRule, setRememberRule] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const selectedCategory = categories.find((c) => c.id === form.category_id) || null;
@@ -37,10 +41,6 @@ export default function EditTransactionModal({
     e.preventDefault();
     if (!form.amount || form.amount <= 0) {
       setErrorMsg("Ingresá un monto válido.");
-      return;
-    }
-    if (rememberRule && !normalizeMerchantKey(merchantKey)) {
-      setErrorMsg("Completá el alias/comercio para poder recordar la categoría.");
       return;
     }
     if (rememberRule && !form.category_id) {
@@ -183,49 +183,52 @@ export default function EditTransactionModal({
           </div>
 
           <div className="rounded-xl bg-gray-50 p-3">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
-              Alias / comercio (tal cual llega del mail, para reconocerlo la próxima vez)
-            </label>
-            <input
-              value={merchantKey}
-              onChange={(e) => setMerchantKey(e.target.value)}
-              placeholder="ej. ALQUILER.CASA o MERPAGO*CENTRAL"
-              className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-            />
-
-            <label className="mt-1 flex items-start gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={rememberRule}
-                onChange={(e) => setRememberRule(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span>
-                Recordar que este alias/comercio es siempre{" "}
-                <strong>
-                  {selectedCategory
-                    ? `${selectedCategory.emoji} ${selectedCategory.name}`
-                    : "(elegí una categoría arriba)"}
-                </strong>
-              </span>
-            </label>
-
-            {rememberRule && (
-              <div className="mt-2 pl-6">
-                <label className="mb-1 block text-xs font-medium text-gray-500">
-                  Nombre para mostrar (opcional, ej. "Empanadas")
-                </label>
-                <input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder={form.description || "Nombre del movimiento"}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  Si lo completás, se usa como descripción de este movimiento y de los
-                  próximos con el mismo alias (la categoría sigue siendo la de arriba).
+            {hasMerchantKey ? (
+              <>
+                <p className="mb-2 text-xs text-gray-500">
+                  Detectado del mail: <span className="font-mono text-gray-700">{merchantKey}</span>
                 </p>
-              </div>
+
+                <label className="flex items-start gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={rememberRule}
+                    onChange={(e) => setRememberRule(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Recordar que este alias/comercio es siempre{" "}
+                    <strong>
+                      {selectedCategory
+                        ? `${selectedCategory.emoji} ${selectedCategory.name}`
+                        : "(elegí una categoría arriba)"}
+                    </strong>
+                  </span>
+                </label>
+
+                {rememberRule && (
+                  <div className="mt-2 pl-6">
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Nombre para mostrar (opcional, ej. "Empanadas")
+                    </label>
+                    <input
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder={form.description || "Nombre del movimiento"}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Si lo completás, se usa como descripción de este movimiento y de los
+                      próximos con el mismo alias (la categoría sigue siendo la de arriba).
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">
+                Este movimiento no tiene un alias/comercio detectado de un mail automático,
+                así que no se puede armar una regla para recordar la categoría.
+              </p>
             )}
           </div>
 

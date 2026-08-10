@@ -28,6 +28,16 @@ Cambios:
   que dedujo la IA).
 - `lib/types.ts`: `CategoryRule.display_name`.
 
+## 0.1 Ajuste 2026-08-10 (2): el alias ya no se escribe a mano
+
+Kiara: "no quiero tener que completar el alias, eso tiene que ser el que
+vino por defecto del mail automático". Se sacó el `<input>` editable del
+alias/comercio: ahora se muestra como texto fijo ("Detectado del mail:
+...") tomado de `transaction.merchant_key`, sin poder tocarlo. Si el
+movimiento no tiene `merchant_key` (carga manual o la IA no lo detectó), se
+oculta directamente la sección de "recordar categoría" con una aclaración,
+porque no hay nada contra lo que matchear mails futuros.
+
 ## 1. Carga automática por mail — YA FUNCIONA (Santander)
 
 - Root cause del bug original: el script pegado en script.google.com NO
