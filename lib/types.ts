@@ -27,6 +27,7 @@ export interface CategoryRule {
   id: number;
   match_key: string;
   category_id: number;
+  display_name: string | null; // nombre personalizado (ej. "Empanadas") para futuros movimientos
   created_at: string;
 }
 

@@ -54,6 +54,8 @@ create table if not exists category_rules (
   id serial primary key,
   match_key text not null unique,     -- alias/comercio normalizado (minúsculas, sin espacios de más)
   category_id integer not null references categories(id),
+  display_name text,                  -- nombre personalizado (ej. "Empanadas") que reemplaza la
+                                       -- descripción cruda del mail en los próximos movimientos
   created_at timestamptz not null default now()
 );
 

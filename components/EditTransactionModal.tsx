@@ -27,6 +27,7 @@ export default function EditTransactionModal({
   });
   const [merchantKey, setMerchantKey] = useState(transaction.merchant_key || "");
   const [rememberRule, setRememberRule] = useState(false);
+  const [displayName, setDisplayName] = useState("");
   const selectedCategory = categories.find((c) => c.id === form.category_id) || null;
   const [status, setStatus] = useState<"idle" | "saving" | "deleting">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -50,13 +51,19 @@ export default function EditTransactionModal({
     setStatus("saving");
     setErrorMsg("");
 
+    // Si tildaste "recordar" y pusiste un nombre personalizado, ese nombre
+    // pasa a ser la descripción de este movimiento también (no solo de los
+    // futuros).
+    const finalDescription =
+      rememberRule && displayName.trim() ? displayName.trim() : form.description;
+
     const { error } = await supabase
       .from("transactions")
       .update({
         date: form.date,
         type: form.type,
         amount: form.amount,
-        description: form.description,
+        description: finalDescription,
         category_id: form.category_id,
         paid_by: form.paid_by,
         merchant_key: normalizeMerchantKey(merchantKey) || null,
@@ -73,7 +80,11 @@ export default function EditTransactionModal({
       const { error: ruleError } = await supabase
         .from("category_rules")
         .upsert(
-          { match_key: normalizeMerchantKey(merchantKey), category_id: form.category_id },
+          {
+            match_key: normalizeMerchantKey(merchantKey),
+            category_id: form.category_id,
+            display_name: displayName.trim() || null,
+          },
           { onConflict: "match_key" }
         );
       if (ruleError) {
@@ -173,15 +184,16 @@ export default function EditTransactionModal({
 
           <div className="rounded-xl bg-gray-50 p-3">
             <label className="mb-1 block text-xs font-medium text-gray-500">
-              Alias / comercio (para reconocerlo en mails futuros)
+              Alias / comercio (tal cual llega del mail, para reconocerlo la próxima vez)
             </label>
             <input
               value={merchantKey}
               onChange={(e) => setMerchantKey(e.target.value)}
-              placeholder="ej. ALQUILER.CASA o MERPAGO*CARREFOUR"
+              placeholder="ej. ALQUILER.CASA o MERPAGO*CENTRAL"
               className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
             />
-            <label className="flex items-start gap-2 text-sm text-gray-700">
+
+            <label className="mt-1 flex items-start gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={rememberRule}
@@ -197,9 +209,24 @@ export default function EditTransactionModal({
                 </strong>
               </span>
             </label>
-            <p className="mt-1 pl-6 text-xs text-gray-400">
-              La categoría se toma del selector de arriba, no se escribe acá.
-            </p>
+
+            {rememberRule && (
+              <div className="mt-2 pl-6">
+                <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Nombre para mostrar (opcional, ej. "Empanadas")
+                </label>
+                <input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder={form.description || "Nombre del movimiento"}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Si lo completás, se usa como descripción de este movimiento y de los
+                  próximos con el mismo alias (la categoría sigue siendo la de arriba).
+                </p>
+              </div>
+            )}
           </div>
 
           <button

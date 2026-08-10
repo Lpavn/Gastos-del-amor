@@ -154,29 +154,30 @@ export async function POST(req: NextRequest) {
       categories?.find((c) => c.name === name)?.id ?? null;
 
     // Reglas manuales: "todo movimiento con este alias/comercio va siempre a
-    // esta categoría" (se cargan editando un movimiento en la app). Si el
-    // mail matchea una regla, pisa lo que haya decidido la IA.
+    // esta categoría (y opcionalmente se muestra con este nombre)" (se cargan
+    // editando un movimiento en la app). Si el mail matchea una regla, pisa
+    // lo que haya decidido la IA.
     const { data: rules, error: rulesError } = await supabase
       .from("category_rules")
-      .select("match_key, category_id");
+      .select("match_key, category_id, display_name");
     if (rulesError) {
       return NextResponse.json({ error: rulesError.message }, { status: 500 });
     }
-    const categoryIdForRule = (merchantKey: string) => {
+    const ruleFor = (merchantKey: string) => {
       const normalized = normalizeMerchantKey(merchantKey);
       if (!normalized) return null;
-      return rules?.find((r) => r.match_key === normalized)?.category_id ?? null;
+      return rules?.find((r) => r.match_key === normalized) ?? null;
     };
 
     const rows = parsed.transactions.map((t: any) => {
       const merchantKey: string = t.merchant_key || "";
-      const ruleCategoryId = categoryIdForRule(merchantKey);
+      const rule = ruleFor(merchantKey);
       return {
         date: t.date,
         type: t.type,
         amount: t.amount,
-        description: t.description,
-        category_id: ruleCategoryId ?? categoryIdFor(t.category_name),
+        description: rule?.display_name || t.description,
+        category_id: rule?.category_id ?? categoryIdFor(t.category_name),
         paid_by: paidBy,
         source: "ai_email" as const,
         merchant_key: normalizeMerchantKey(merchantKey) || null,

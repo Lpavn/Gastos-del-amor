@@ -1,36 +1,172 @@
-# Contexto: carga automática por mail
+# Contexto del proyecto — notas de sesión (actualizado 2026-08-10)
 
-Notas de esta sesión para no perder el hilo. Se puede borrar una vez que todo
-esté funcionando y confirmado.
+Notas para no perder el hilo entre sesiones. Se puede borrar cuando todo lo
+de abajo esté confirmado y cerrado.
 
-## Qué pasaba
+## 0. Ajuste 2026-08-10: reglas con nombre personalizado + UX más clara
 
-El README ya describía la función "Carga automática por mail" (Google Apps
-Script revisa Gmail y carga los movimientos solo), pero el código para que
-funcione nunca se había subido al repo. Por eso "no andaba": no existía nada
-del lado de la app a lo que el script le pudiera pegar.
+Pedido de Kiara: el select de categoría en `EditTransactionModal` YA elegía
+de la lista real de categorías (no era texto libre), pero el diseño no
+dejaba claro que el checkbox "recordar" usaba esa categoría — se confundía
+con el campo de texto "Alias / comercio" (que es otra cosa: el texto que
+manda el banco para reconocer el mismo comercio en mails futuros, ej.
+`MERPAGO*CENTRAL`).
 
-## Qué se creó/modificó (ya está en la carpeta, falta hacer push)
+Cambios:
+- El checkbox ahora muestra en vivo la categoría elegida (emoji + nombre).
+- Nuevo: cuando el checkbox está tildado aparece un campo "Nombre para
+  mostrar" (ej. "Empanadas"). Si se completa, reemplaza la descripción
+  cruda tanto en el movimiento actual como en los próximos que matcheen el
+  mismo alias.
+- Tabla `category_rules`: columna nueva `display_name` (nullable).
+  Migración: `supabase/migration_rule_display_name.sql` (**falta correrla
+  en el SQL Editor de Supabase** — `alter table category_rules add column
+  if not exists display_name text;`). `schema.sql` actualizado para
+  instalaciones nuevas.
+- `app/api/import-email/route.ts`: si hay regla con `display_name`, se usa
+  como `description` del movimiento importado (si no, queda la descripción
+  que dedujo la IA).
+- `lib/types.ts`: `CategoryRule.display_name`.
 
-- `app/api/import-email/route.ts` — endpoint nuevo. Recibe `{ secret, subject, from, text, person }`, valida `IMPORT_SECRET`, usa Gemini para leer el texto del mail y extraer el/los movimiento(s), y los inserta en Supabase con `source: "ai_email"`.
-- `google-apps-script/Code.gs` — script para pegar en script.google.com. Función `revisarMails()`, configurable con `WEBHOOK_URL`, `SECRET` y `FUENTES` (label de Gmail → persona).
-- `supabase/migration_email_auto.sql` — agrega `ai_email` como `source` válido en la tabla `transactions` (para bases ya existentes).
-- `supabase/schema.sql` — actualizado para que instalaciones nuevas ya incluyan `ai_email` sin necesitar la migración.
-- `lib/types.ts` — tipo `Transaction.source` acepta `"ai_email"`.
-- `components/TransactionList.tsx` — muestra 📧 en los movimientos que vinieron por mail.
-- `.env.example` — sumó `IMPORT_SECRET` y `EMAIL_IMPORT_PERSON`.
-- `README.md` — reemplazado por la versión con la guía completa (Pasos A-D).
+## 1. Carga automática por mail — YA FUNCIONA (Santander)
 
-Verificado: `tsc --noEmit` sin errores, sintaxis de `Code.gs` válida.
+- Root cause del bug original: el script pegado en script.google.com NO
+  coincidía con `google-apps-script/Code.gs` del repo (era una versión vieja
+  con otra lógica de logs). Se reemplazó por el código actual y ahora anda.
+- Confirmado con una prueba real: `POST /api/import-email` con un mail real
+  de Santander devolvió `{"imported": 1}`. Pipeline completo (Vercel →
+  Gemini → Supabase) verificado end-to-end.
+- Datos de la instalación actual:
+  - URL de la app: `https://gastos-del-amor.vercel.app/`
+  - `IMPORT_SECRET` en Vercel: `casa2026-xk93jd-secreto`
+  - Label de Gmail activa: `Santander-Gastos`
+  - `MercadoPago-Gastos` NO existe como label (el plan original era Mercado
+    Pago, pero Kiara va a usar Banco Nación en su lugar — ver sección 4).
+- Importante (no es un bug): un mail se reprocesa marcándolo como **no
+  leído** en Gmail (`Shift+U`), no sacándole ninguna etiqueta. El script no
+  usa etiquetas de "procesado", usa el estado leído/no leído.
 
-## Pendiente (pasos del usuario, no de código)
+## 2. Feature nueva: editar y eliminar movimientos
 
-1. **Push** de todo esto al repo de GitHub.
-2. **Supabase**: correr `supabase/migration_email_auto.sql` en SQL Editor (la base ya existía antes de este cambio).
-3. **Vercel** → Settings → Environment Variables: agregar `IMPORT_SECRET` (inventar un texto largo) y `EMAIL_IMPORT_PERSON` → luego **Redeploy**.
-4. **Gmail**: crear un filtro + etiqueta por cada fuente (ej. `Santander-Gastos`, `MercadoPago-Gastos`) — Paso A del README.
-5. **script.google.com**: crear proyecto nuevo con la MISMA cuenta de Gmail, pegar `google-apps-script/Code.gs`, completar `WEBHOOK_URL` (link de Vercel + `/api/import-email`), `SECRET` (igual a `IMPORT_SECRET`) y `FUENTES`. Ejecutar `revisarMails` una vez a mano para autorizar permisos.
-6. **Trigger**: en el mismo editor, Activadores → `revisarMails` → cada 15 minutos.
+- `components/EditTransactionModal.tsx` (nuevo): tocando cualquier
+  movimiento en la lista se abre una hoja inferior para editar fecha,
+  monto, tipo, descripción, categoría, quién pagó — o eliminarlo (con
+  confirmación).
+- `components/TransactionList.tsx`: cada fila es ahora un botón que abre
+  ese modal. Recibe `categories` completo (antes solo `categoryById`).
+- `app/page.tsx`: pasa `categories` y `refresh` al listado.
+- Ya pusheado a GitHub (commit "Modificar y eliminar movimientos").
 
-Una vez hecho esto, los movimientos de las cuentas configuradas deberían
-aparecer solos en la app, marcados con 📧.
+## 3. Feature nueva: reglas de autocategorización por alias/comercio
+
+Pedido de Kiara: cuando un mail llega con categoría "Otros" (ej. una
+transferencia a un alias que la IA no reconoce), poder decirle a la app
+"este alias siempre es Alquiler" y que la próxima vez se autocategorice.
+
+Cómo quedó implementado:
+
+- La IA (Gemini), al leer un mail, ahora también extrae `merchant_key`: el
+  alias o nombre de comercio **copiado literal** del mail (no resumido), y
+  se guarda en el movimiento.
+- Tabla nueva `category_rules` (match_key → category_id) en Supabase.
+- En `app/api/import-email/route.ts`: antes de insertar, se normaliza el
+  `merchant_key` del mail y se busca si hay una regla guardada con ese
+  match; si hay, esa categoría pisa lo que haya sugerido la IA.
+- En `EditTransactionModal.tsx`: campo "Alias / comercio" editable
+  (precargado con lo que detectó la IA) + checkbox "Recordar esta categoría
+  para todos los movimientos con este alias/comercio". Al guardar con el
+  checkbox tildado, hace upsert en `category_rules`.
+- Archivos: `lib/merchantKey.ts` (nuevo), `lib/types.ts` (tipo
+  `CategoryRule` + `merchant_key` en `Transaction`),
+  `supabase/schema.sql` (actualizado), `supabase/migration_category_rules.sql`
+  (nuevo — **ya corrido por Kiara en el SQL Editor de Supabase**).
+- Documentado en el README, sección "Corregir la categoría para siempre".
+
+## 4. Banco Nación (BNA) — investigado, todavía no configurado
+
+El plan cambió: en vez de Mercado Pago, la segunda fuente de mails va a ser
+Banco Nación. Investigué cómo activarlo (fuentes al final):
+
+- BNA **no manda un mail por movimiento individual** como Santander. Tiene
+  un "Servicio de Mensajes y Alertas" que es un **resumen periódico**
+  (elegís qué días de la semana lo recibís) con "Consulta de Últimos
+  Movimientos", "Saldos" o "Vencimientos".
+- Ese servicio solo está en el **Home Banking clásico (web)**, no está
+  migrado todavía a la app BNA+ (el banco está unificando ambas
+  plataformas).
+- Kiara nunca configuró usuario/clave de Home Banking. Para generarlo:
+  - Opción 1: desde la app BNA+, si ya tiene validación digital, buscar
+    "Creá tu usuario Home Banking" (pide datos de la tarjeta de débito).
+  - Opción 2: cajero Red Link → Gestión de Claves → Home Banking/Banca
+    Móvil → Obtención de clave (pide tarjeta de débito, da un ticket con
+    "Número de Usuario").
+  - Login web: `hb.redlink.com.ar/bna` (Home Banking clásico).
+  - Una vez adentro: Opciones Personales → Servicio de mensajes y alertas →
+    Agregar → "Consulta de Últimos Movimientos" → frecuencia diaria →
+    confirmar con clave.
+
+**Pendiente / riesgo a resolver cuando llegue el primer mail real de BNA:**
+como es un resumen y no sabemos si trae "todo lo nuevo desde el mail
+anterior" o "siempre los últimos N movimientos", podría haber
+**duplicados** si el mismo movimiento aparece en dos resúmenes seguidos.
+Falta: (a) que Kiara mande un mail de ejemplo real de BNA para ver el
+formato, (b) ajustar el prompt de Gemini para leer una lista de varios
+movimientos en un solo mail (el endpoint ya soporta `transactions: []`,
+falta afinar el prompt), (c) posiblemente sumar una protección
+antiduplicados (ej. no insertar si ya existe un movimiento igual en fecha +
+monto + merchant_key).
+
+## 5. Ualá — investigado, sin confirmar
+
+No encontré evidencia de que Ualá mande mail por movimiento (a diferencia
+de Santander/Mercado Pago). Lo que sí tiene confirmado es notificaciones
+push dentro de la app. Pendiente que Kiara revise Perfil/Configuración →
+Notificaciones en la app por si existe la opción de mail. Si no existe, la
+alternativa es una app de automatización (ej. MacroDroid) que reenvíe el
+texto de la notificación push como mail a Gmail, entrando al mismo
+pipeline. Sin definir todavía — depende de lo que Kiara encuentre en la
+app.
+
+## 6. Bug de deploy en Vercel — fix a mitad de camino
+
+Al pushear el commit de los puntos 2 y 3, se coló sin querer la carpeta
+`menu-digital-demo/` (un proyecto sin relación, un demo de menú digital
+para un local, que estaba suelto en la misma carpeta de Windows). Como
+Next.js tipa todos los `.tsx` del repo al buildear, sus errores
+(`Module has no exported member 'Product'`, etc.) rompieron el build de
+Vercel.
+
+Fix aplicado:
+- `.gitignore` actualizado para excluir `menu-digital-demo/` y
+  `tsconfig.tsbuildinfo`.
+- **Pendiente que Kiara corra ella misma** (no se pudo desde este entorno
+  por un lock de git en la carpeta sincronizada con OneDrive):
+  ```powershell
+  cd "C:\Users\Luca\OneDrive\Desktop\Gastos-del-amor"
+  Remove-Item .git\index.lock -ErrorAction SilentlyContinue
+  git rm -r --cached menu-digital-demo
+  git rm --cached tsconfig.tsbuildinfo
+  git add .gitignore
+  git commit -m "Excluir menu-digital-demo y tsconfig.tsbuildinfo del repo"
+  git push
+  ```
+- Falta confirmar que corrió esto y que el redeploy de Vercel pasó OK.
+
+## Fuentes usadas (Banco Nación / Ualá)
+
+- https://bna.com.ar/Home/ServicioDeMensajesYAlertas
+- https://www.ambito.com/informacion-general/home-banking/bna-como-cambiar-mi-usuario-y-clave-homebanking-n5459118
+- https://hb.redlink.com.ar/bna/login.htm?hb=clasico
+- https://www.uala.com.ar/preguntas-frecuentes
+- https://www.sirchandler.com.ar/2024/01/la-tarjeta-de-credito-de-uala-sin-costo-y-buen-limite/
+
+## Próximos pasos (en orden)
+
+1. Kiara corre los comandos git de la sección 6 y confirma que Vercel
+   redeployó bien.
+2. Kiara genera usuario/clave de Home Banking del BNA y activa el Servicio
+   de Mensajes y Alertas (sección 4).
+3. Cuando llegue el primer mail de BNA, Kiara lo pega en el chat para
+   ajustar el prompt/parsing y evaluar el tema duplicados.
+4. Kiara revisa notificaciones de Ualá (sección 5) y define si hace falta
+   el workaround de MacroDroid.
