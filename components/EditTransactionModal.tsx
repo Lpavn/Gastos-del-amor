@@ -27,6 +27,7 @@ export default function EditTransactionModal({
   });
   const [merchantKey, setMerchantKey] = useState(transaction.merchant_key || "");
   const [rememberRule, setRememberRule] = useState(false);
+  const selectedCategory = categories.find((c) => c.id === form.category_id) || null;
   const [status, setStatus] = useState<"idle" | "saving" | "deleting">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -187,8 +188,18 @@ export default function EditTransactionModal({
                 onChange={(e) => setRememberRule(e.target.checked)}
                 className="mt-0.5"
               />
-              Recordar esta categoría para todos los movimientos con este alias/comercio
+              <span>
+                Recordar que este alias/comercio es siempre{" "}
+                <strong>
+                  {selectedCategory
+                    ? `${selectedCategory.emoji} ${selectedCategory.name}`
+                    : "(elegí una categoría arriba)"}
+                </strong>
+              </span>
             </label>
+            <p className="mt-1 pl-6 text-xs text-gray-400">
+              La categoría se toma del selector de arriba, no se escribe acá.
+            </p>
           </div>
 
           <button
