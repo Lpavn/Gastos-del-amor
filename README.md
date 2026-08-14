@@ -8,7 +8,7 @@ real) en los dos celulares. Incluye estadísticas por mes y por año.
 No es una app de la App Store / Play Store: es una web app que se agrega a la
 pantalla de inicio del celular y funciona como una app normal.
 
-## Qué vas a necesitar (todo 100% gratis, sin tarjeta) 
+## Qué vas a necesitar (todo 100% gratis, sin tarjeta)
 
 1. Una cuenta en **[Supabase](https://supabase.com)** (base de datos + fotos).
 2. Una cuenta en **[Vercel](https://vercel.com)** (para que la app viva en un link).
