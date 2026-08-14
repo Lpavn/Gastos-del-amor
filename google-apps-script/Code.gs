@@ -85,7 +85,7 @@ function enviarMail(message, person) {
   const code = response.getResponseCode();
 
   if (code >= 200 && code < 300) {
-    Logger.log("OK (" + person + "): " + message.getSubject());
+    Logger.log("OK (" + person + "): " + message.getSubject() + " -> " + response.getContentText());
     return true;
   }
 

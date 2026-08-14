@@ -17,7 +17,7 @@ const RESPONSE_SCHEMA = {
     transactions: {
       type: Type.ARRAY,
       description:
-        "Un elemento por cada movimiento encontrado. Si es un ticket de compra único, normalmente es un solo elemento con el total. Si es una captura de movimientos bancarios, puede haber varios elementos, uno por línea/movimiento.",
+        "Un elemento por cada movimiento encontrado. Si es un ticket de compra con varios productos (por ejemplo supermercado, farmacia, kiosco), DESGLOSÁ cada producto/línea del ticket en un elemento separado, con su propio nombre y precio — no sumes todo en un único total. Si es un comprobante de un solo consumo (ej: una transferencia, una factura de servicio) usá un solo elemento con el total. Si es una captura de movimientos bancarios, un elemento por cada línea/movimiento.",
       items: {
         type: Type.OBJECT,
         properties: {
@@ -36,7 +36,8 @@ const RESPONSE_SCHEMA = {
           },
           description: {
             type: Type.STRING,
-            description: "Descripción breve: comercio, concepto o detalle del movimiento.",
+            description:
+              "Descripción breve. Si es un ítem desglosado de un ticket, el nombre del producto (ej: 'Leche La Serenísima 1L'). Si es un movimiento único, el comercio o concepto (ej: 'Coto', 'Transferencia a Juan').",
           },
           category_name: {
             type: Type.STRING,
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
           parts: [
             { inlineData: { mimeType: mimeType || "image/jpeg", data: image } },
             {
-              text: `Hoy es ${today}. Analizá esta foto: puede ser un ticket/factura de compra, un comprobante de transferencia, o una captura de pantalla con una lista de movimientos bancarios. Extraé todos los movimientos de dinero que encuentres. Categorías permitidas: ${categoryNames.join(", ")}. Si un dato no está claro, hacé la mejor estimación posible y marcá confidence "baja".`,
+              text: `Hoy es ${today}. Analizá esta foto: puede ser un ticket/factura de compra, un comprobante de transferencia, o una captura de pantalla con una lista de movimientos bancarios. Extraé todos los movimientos de dinero que encuentres. Si es un ticket de compra con varios productos (por ejemplo un ticket de supermercado), NO lo resumas en un solo gasto: desglosá cada producto como un movimiento individual, usando el nombre del producto como descripción y su precio como monto. Ignorá líneas que no sean productos (subtotal, IVA, "total", vuelto, etc.), esas no van como movimientos aparte. Categorías permitidas: ${categoryNames.join(", ")}. Si un dato no está claro, hacé la mejor estimación posible y marcá confidence "baja".`,
             },
           ],
         },

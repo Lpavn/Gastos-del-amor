@@ -147,8 +147,11 @@ En Vercel → tu proyecto → **Settings → Environment Variables**, agregá:
 |---|---|
 | `IMPORT_SECRET` | inventá cualquier texto largo y raro, ej. `casa2026-xk93jd-secreto` |
 | `EMAIL_IMPORT_PERSON` | nombre por defecto si alguna vez falta el dato (podés dejar `Kiara`) |
+| `INTERNAL_TRANSFER_ALIASES` | alias/CBU que Luca y Kiara usan para transferirse plata entre ellos, separados por coma (ej. `lucapavon,0000003100028792496070`). Cualquier transferencia enviada o recibida hacia/desde uno de estos valores se ignora (no es un gasto ni un ingreso de la pareja) |
 
 Guardá y hacé **Redeploy** del proyecto para que tomen efecto.
+
+**Nota sobre el pago del resumen de tarjeta:** cuando llegue el mail de que se debitó el pago total del resumen de la tarjeta de crédito, la IA lo detecta sola (mira frases como "débito automático por el pago total") y no lo carga, para no duplicar los gastos individuales ya cargados con cada compra. Los simples recordatorios de "tu resumen vence pronto" tampoco se cargan porque todavía no hubo movimiento de plata.
 
 ### Paso C — Crear el script en Google
 
