@@ -24,6 +24,7 @@ insert into categories (name, emoji, kind) values
   ('Entretenimiento', '🎬', 'expense'),
   ('Ropa', '👕', 'expense'),
   ('Mascotas', '🐾', 'expense'),
+  ('Suscripciones', '📺', 'expense'),
   ('Sueldo / Aporte', '💰', 'income'),
   ('Otros ingresos', '➕', 'income'),
   ('Otros', '🔖', 'both')

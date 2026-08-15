@@ -11,6 +11,7 @@ export const DEFAULT_CATEGORIES: { name: string; emoji: string; kind: "expense" 
   { name: "Entretenimiento", emoji: "🎬", kind: "expense" },
   { name: "Ropa", emoji: "👕", kind: "expense" },
   { name: "Mascotas", emoji: "🐾", kind: "expense" },
+  { name: "Suscripciones", emoji: "📺", kind: "expense" },
   { name: "Sueldo / Aporte", emoji: "💰", kind: "income" },
   { name: "Otros ingresos", emoji: "➕", kind: "income" },
   { name: "Otros", emoji: "🔖", kind: "both" },

@@ -77,7 +77,7 @@ export default function AddPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [mode, setMode] = useState<"foto" | "manual">("foto");
+  const [mode, setMode] = useState<"foto" | "manual">("manual");
   const [categories, setCategories] = useState<Category[]>([]);
   const [drafts, setDrafts] = useState<DraftTransaction[]>([]);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -232,17 +232,17 @@ export default function AddPage() {
       <div className="mb-4 flex rounded-full bg-gray-100 p-1 text-sm font-medium">
         <button
           type="button"
-          onClick={() => setMode("foto")}
-          className={`flex-1 rounded-full py-1.5 ${mode === "foto" ? "bg-white shadow-sm text-brand-700" : "text-gray-500"}`}
-        >
-          📷 Foto con IA
-        </button>
-        <button
-          type="button"
           onClick={() => setMode("manual")}
           className={`flex-1 rounded-full py-1.5 ${mode === "manual" ? "bg-white shadow-sm text-brand-700" : "text-gray-500"}`}
         >
           ✍️ Manual
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("foto")}
+          className={`flex-1 rounded-full py-1.5 ${mode === "foto" ? "bg-white shadow-sm text-brand-700" : "text-gray-500"}`}
+        >
+          📷 Foto con IA
         </button>
       </div>
 
