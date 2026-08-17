@@ -1,7 +1,52 @@
-# Contexto del proyecto — notas de sesión (actualizado 2026-08-10)
+# Contexto del proyecto — notas de sesión (actualizado 2026-08-17)
 
 Notas para no perder el hilo entre sesiones. Se puede borrar cuando todo lo
 de abajo esté confirmado y cerrado.
+
+## -1. Ajuste 2026-08-17: compras en dólares con tarjeta de crédito
+
+Bug reportado por Kiara: un mail de Santander de una compra en dólares
+("Google One", U$S1,99, con la **Tarjeta Santander Visa Crédito terminada
+en 9898**) se cargó solo como **2 ARS** — el pipeline nunca distinguió
+moneda, `amount` siempre se guarda asumiendo pesos y a Gemini solo se le
+pedía "el monto, sin símbolo de moneda".
+
+Decisión de Kiara (no es un fix de conversión, es un cambio de flujo):
+las compras con tarjeta de crédito **dejan de cargarse automáticamente por
+mail**, todas — no solo las que vienen en dólares. En cambio, se van a
+cargar todas juntas, una vez por mes, cuando Kiara suba una **captura del
+resumen de la tarjeta** con "Foto con IA": ese resumen ya trae el monto
+final convertido a pesos (el que realmente cobra el banco), así que no hay
+que estimar ningún tipo de cambio.
+
+Implementado:
+- `app/api/import-email/route.ts`: nuevo campo `is_credit_card_purchase`
+  en el schema de Gemini. La IA lo marca `true` cuando el mail dice
+  explícitamente "Tarjeta ... **Crédito** terminada en ..." (a diferencia
+  de "Débito"). Esos movimientos se filtran antes de insertar (nuevo
+  contador `skippedCreditCardPurchase` en la respuesta del endpoint), igual
+  que ya se hacía con `is_credit_card_bill_payment` (el débito del pago
+  total del resumen, que se sigue salteando).
+- `app/api/parse-receipt/route.ts`: el prompt de "Foto con IA" ahora
+  menciona explícitamente el caso "resumen de tarjeta de crédito" —
+  desglosa cada línea/consumo como movimiento aparte, ignora líneas de
+  saldo/pago/intereses, y si una línea muestra dólares (u otra moneda) +
+  su equivalente en pesos, usa siempre el monto en **pesos**.
+- `README.md`: sección "Nota sobre compras con tarjeta de crédito"
+  reescrita para explicar el nuevo flujo.
+- Sin cambios en `google-apps-script/Code.gs` ni en el schema de Supabase:
+  el filtro es todo downstream (Gemini + API), no hace falta tocar el
+  script ni la base.
+
+**Pendiente:**
+- Kiara tiene que borrar a mano el movimiento viejo "Google One" cargado
+  como 2 ARS (botón ✕ en la lista) — no se corrigió automáticamente desde
+  acá.
+- Falta que Kiara pruebe con una captura real del resumen de Santander
+  para confirmar que el desglose y la conversión a pesos por línea
+  funcionan bien (especialmente el caso de una línea en dólares).
+- Sigue habiendo compras con tarjeta de **débito** que se cargan solas por
+  mail como siempre — esto no cambió.
 
 ## 0. Ajuste 2026-08-10: reglas con nombre personalizado + UX más clara
 

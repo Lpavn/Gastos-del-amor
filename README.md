@@ -90,10 +90,11 @@ mismo balance actualizado en tiempo real.
 
 ## Cómo se usa
 
-- **Foto con IA**: sacás una foto a un ticket, comprobante o a la pantalla con
-  el resumen de movimientos del banco. La IA detecta uno o varios movimientos,
-  te los muestra para revisar/corregir (fecha, monto, categoría, quién pagó) y
-  recién ahí se guardan.
+- **Foto con IA**: sacás una foto a un ticket, comprobante, a la pantalla con
+  el resumen de movimientos del banco, o al resumen de la tarjeta de crédito
+  (ver más abajo). La IA detecta uno o varios movimientos, te los muestra para
+  revisar/corregir (fecha, monto, categoría, quién pagó) y recién ahí se
+  guardan.
 - **Manual**: para cargar un movimiento a mano sin foto.
 - **Inicio**: balance en conjunto (ingresos - gastos) y cuánto aportó/gastó
   cada uno, con los últimos movimientos.
@@ -151,7 +152,7 @@ En Vercel → tu proyecto → **Settings → Environment Variables**, agregá:
 
 Guardá y hacé **Redeploy** del proyecto para que tomen efecto.
 
-**Nota sobre el pago del resumen de tarjeta:** cuando llegue el mail de que se debitó el pago total del resumen de la tarjeta de crédito, la IA lo detecta sola (mira frases como "débito automático por el pago total") y no lo carga, para no duplicar los gastos individuales ya cargados con cada compra. Los simples recordatorios de "tu resumen vence pronto" tampoco se cargan porque todavía no hubo movimiento de plata.
+**Nota sobre compras con tarjeta de crédito:** ninguna compra puntual hecha con tarjeta de crédito se carga automáticamente por mail (la IA detecta que el mail dice "Tarjeta ... Crédito terminada en ..." y la saltea), y tampoco se carga el mail de que se debitó el pago total del resumen. Esto es a propósito: como algunas compras pueden estar en dólares u otra moneda, cargarlas apenas llega el mail obligaría a inventar un tipo de cambio que después no coincide con lo que termina cobrando el banco. En cambio, cuando cierra o se paga el resumen de la tarjeta, sacá una captura de pantalla (banco/Home Banking) con el detalle de los consumos y subila con **"Foto con IA"**: la IA desglosa cada línea del resumen como un movimiento aparte, ya con el monto final convertido a pesos, para revisar antes de guardar. Las compras con tarjeta de **débito**, transferencias y demás movimientos de cuenta sí se siguen cargando solas por mail como siempre.
 
 ### Paso C — Crear el script en Google
 

@@ -32,7 +32,8 @@ const RESPONSE_SCHEMA = {
           },
           amount: {
             type: Type.NUMBER,
-            description: "Monto total en valor absoluto (positivo), sin símbolo de moneda.",
+            description:
+              "Monto total en valor absoluto (positivo), sin símbolo de moneda, SIEMPRE en pesos argentinos. Si es una línea de un resumen de tarjeta de crédito y aparece un monto en dólares u otra moneda extranjera junto con su equivalente en pesos (ej. 'U$S 1,99' y al lado o abajo '$ 2.150,00'), usá el monto en PESOS (el que efectivamente se cobra), nunca el de la moneda extranjera.",
           },
           description: {
             type: Type.STRING,
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
           parts: [
             { inlineData: { mimeType: mimeType || "image/jpeg", data: image } },
             {
-              text: `Hoy es ${today}. Analizá esta foto: puede ser un ticket/factura de compra, un comprobante de transferencia, o una captura de pantalla con una lista de movimientos bancarios. Extraé todos los movimientos de dinero que encuentres. Si es un ticket de compra con varios productos (por ejemplo un ticket de supermercado), NO lo resumas en un solo gasto: desglosá cada producto como un movimiento individual, usando el nombre del producto como descripción y su precio como monto. Ignorá líneas que no sean productos (subtotal, IVA, "total", vuelto, etc.), esas no van como movimientos aparte. Categorías permitidas: ${categoryNames.join(", ")}. Si un dato no está claro, hacé la mejor estimación posible y marcá confidence "baja".`,
+              text: `Hoy es ${today}. Analizá esta foto: puede ser un ticket/factura de compra, un comprobante de transferencia, una captura de pantalla con una lista de movimientos bancarios, o el resumen de una tarjeta de crédito. Extraé todos los movimientos de dinero que encuentres. Si es un ticket de compra con varios productos (por ejemplo un ticket de supermercado), NO lo resumas en un solo gasto: desglosá cada producto como un movimiento individual, usando el nombre del producto como descripción y su precio como monto. Ignorá líneas que no sean productos (subtotal, IVA, "total", vuelto, etc.), esas no van como movimientos aparte. Si es un resumen de tarjeta de crédito, desglosá cada consumo/línea del resumen como un movimiento individual (fecha, comercio, monto), ignorando líneas de "saldo anterior", "pago realizado", "intereses" salvo que sean un cargo real; y para cada línea en dólares u otra moneda extranjera usá siempre el monto ya convertido a pesos que muestra el resumen, no el monto en la moneda original. Categorías permitidas: ${categoryNames.join(", ")}. Si un dato no está claro, hacé la mejor estimación posible y marcá confidence "baja".`,
             },
           ],
         },

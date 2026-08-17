@@ -78,10 +78,24 @@ const RESPONSE_SCHEMA = {
           is_credit_card_bill_payment: {
             type: Type.BOOLEAN,
             description:
-              "true SOLO si el movimiento es el débito/pago del RESUMEN/SALDO TOTAL de una tarjeta de crédito (ej. 'débito automático por el pago total de tu resumen', 'pago de tu tarjeta terminada en 1234'). false para una compra puntual hecha CON la tarjeta (esa sí es un gasto normal). Un mail que solo AVISA que el resumen 'vence pronto' sin haberse debitado todavía no es un movimiento real: en ese caso is_movement debe ser false y este campo no importa.",
+              "true SOLO si el movimiento es el débito/pago del RESUMEN/SALDO TOTAL de una tarjeta de crédito (ej. 'débito automático por el pago total de tu resumen', 'pago de tu tarjeta terminada en 1234'). false para una compra puntual hecha CON la tarjeta (ver is_credit_card_purchase). Un mail que solo AVISA que el resumen 'vence pronto' sin haberse debitado todavía no es un movimiento real: en ese caso is_movement debe ser false y este campo no importa.",
+          },
+          is_credit_card_purchase: {
+            type: Type.BOOLEAN,
+            description:
+              "true si el movimiento es una COMPRA puntual hecha con una tarjeta de CRÉDITO — el mail lo dice explícitamente, ej. 'Tarjeta Santander Visa Crédito terminada en 9898' (a diferencia de una tarjeta de Débito). Estas compras NO se cargan automáticamente por mail: se cargan todas juntas una vez por mes con una captura del resumen de la tarjeta, ya con el monto final convertido a pesos (evita duplicados y errores de conversión en compras en dólares u otra moneda). false para compras con tarjeta de débito, transferencias, débitos de cuenta u otros movimientos — esos sí se cargan normalmente.",
           },
         },
-        required: ["date", "type", "amount", "description", "category_name", "merchant_key", "is_credit_card_bill_payment"],
+        required: [
+          "date",
+          "type",
+          "amount",
+          "description",
+          "category_name",
+          "merchant_key",
+          "is_credit_card_bill_payment",
+          "is_credit_card_purchase",
+        ],
       },
     },
   },
@@ -195,6 +209,7 @@ export async function POST(req: NextRequest) {
 
     let skippedInternalTransfer = 0;
     let skippedCardBillPayment = 0;
+    let skippedCreditCardPurchase = 0;
 
     const rows = parsed.transactions
       .filter((t: any) => {
@@ -204,6 +219,10 @@ export async function POST(req: NextRequest) {
         }
         if (t.is_credit_card_bill_payment) {
           skippedCardBillPayment++;
+          return false;
+        }
+        if (t.is_credit_card_purchase) {
+          skippedCreditCardPurchase++;
           return false;
         }
         return true;
@@ -228,6 +247,7 @@ export async function POST(req: NextRequest) {
         imported: 0,
         skippedInternalTransfer,
         skippedCardBillPayment,
+        skippedCreditCardPurchase,
       });
     }
 
@@ -240,6 +260,7 @@ export async function POST(req: NextRequest) {
       imported: rows.length,
       skippedInternalTransfer,
       skippedCardBillPayment,
+      skippedCreditCardPurchase,
     });
   } catch (err: any) {
     console.error(err);
