@@ -5,7 +5,26 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Category, DraftTransaction } from "@/lib/types";
 import { PERSON_1, PERSON_2, getCurrentPerson } from "@/lib/person";
+import { normalizeMerchantKey } from "@/lib/merchantKey";
 import ReviewTable from "@/components/ReviewTable";
+
+// Cuánto puede variar la fecha entre lo que dice la imagen y lo que ya está
+// guardado y seguir considerándose "el mismo movimiento" (ej. si al corregir
+// la categoría de un movimiento importado por mail también se tocó la fecha
+// sin querer).
+const DUPLICATE_DATE_TOLERANCE_DAYS = 4;
+
+function daysBetween(dateA: string, dateB: string): number {
+  const a = new Date(dateA + "T00:00:00").getTime();
+  const b = new Date(dateB + "T00:00:00").getTime();
+  return Math.abs(a - b) / 86400000;
+}
+
+function shiftDate(date: string, days: number): string {
+  const d = new Date(date + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 // Las fotos que salen de la cámara del celular suelen pesar varios MB, y
 // Vercel rechaza (413 "Request Entity Too Large") cualquier request de más
@@ -70,6 +89,49 @@ function compressImage(
       reject(new Error("No se pudo abrir la imagen."));
     };
     img.src = objectUrl;
+  });
+}
+
+// Compara los movimientos que acaba de leer la IA (foto de un ticket, o una
+// captura con una lista de movimientos del banco) contra lo que ya está
+// guardado en la base, para detectar cuáles ya se cargaron antes (por
+// ejemplo por mail) y no haya que revisarlos/guardarlos de nuevo.
+//
+// Match principal: mismo alias/CBU (merchant_key) + mismo monto (tolerancia
+// $1 por redondeo) + fecha dentro de DUPLICATE_DATE_TOLERANCE_DAYS días (la
+// fecha puede haberse corregido a mano al editar la categoría, así que no
+// exigimos que sea exacta).
+// Si a algún lado le falta el alias/CBU (ej. un ítem de ticket, o un
+// movimiento cargado manual sin ese dato), se cae a matchear solo por monto
+// + fecha cercana. Sigue siendo una sugerencia, no un borrado: el usuario
+// puede tildar "Cargar igual" si el match está mal.
+async function markDuplicates(drafts: DraftTransaction[]): Promise<DraftTransaction[]> {
+  if (drafts.length === 0) return drafts;
+  const dates = drafts.map((d) => d.date).sort();
+  const minDate = shiftDate(dates[0], -DUPLICATE_DATE_TOLERANCE_DAYS);
+  const maxDate = shiftDate(dates[dates.length - 1], DUPLICATE_DATE_TOLERANCE_DAYS);
+
+  const { data: existing } = await supabase
+    .from("transactions")
+    .select("date, amount, type, merchant_key")
+    .gte("date", minDate)
+    .lte("date", maxDate);
+
+  if (!existing || existing.length === 0) {
+    return drafts.map((d) => ({ ...d, matched: false, selected: true }));
+  }
+
+  return drafts.map((d) => {
+    const draftKey = normalizeMerchantKey(d.merchant_key);
+    const matched = existing.some((e) => {
+      if (e.type !== d.type) return false;
+      if (Math.abs(Number(e.amount) - Number(d.amount)) >= 1) return false;
+      if (daysBetween(e.date, d.date) > DUPLICATE_DATE_TOLERANCE_DAYS) return false;
+      const existingKey = normalizeMerchantKey(e.merchant_key);
+      if (draftKey && existingKey) return draftKey === existingKey;
+      return true; // sin alias/CBU de algún lado: monto + fecha cercana alcanza
+    });
+    return { ...d, matched, selected: !matched };
   });
 }
 
@@ -143,7 +205,8 @@ export default function AddPage() {
         ...t,
         paid_by: current,
       }));
-      setDrafts(withPerson);
+      const withMatches = await markDuplicates(withPerson);
+      setDrafts(withMatches);
       setStatus("idle");
     } catch (err: any) {
       setStatus("error");
@@ -175,11 +238,12 @@ export default function AddPage() {
   }
 
   async function saveDrafts() {
-    if (drafts.length === 0) return;
+    const toSave = drafts.filter((d) => d.selected !== false);
+    if (toSave.length === 0) return;
     setStatus("saving");
     const receiptUrl = await uploadReceiptIfNeeded();
 
-    const rows = drafts.map((d) => ({
+    const rows = toSave.map((d) => ({
       date: d.date,
       type: d.type,
       amount: d.amount,
@@ -188,6 +252,7 @@ export default function AddPage() {
       paid_by: d.paid_by,
       receipt_url: receiptUrl,
       source: "ai_receipt" as const,
+      merchant_key: normalizeMerchantKey(d.merchant_key) || null,
     }));
 
     const { error } = await supabase.from("transactions").insert(rows);
@@ -296,6 +361,13 @@ export default function AddPage() {
 
           {drafts.length > 0 && (
             <>
+              {drafts.some((d) => d.matched) && (
+                <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  {drafts.filter((d) => d.matched).length} de {drafts.length} ya parecen estar
+                  cargados (mismo alias/CBU y monto, fecha cercana) y no se van a guardar de
+                  nuevo. Revisalos abajo y tildá "Cargar igual" si alguno en realidad falta.
+                </p>
+              )}
               <ReviewTable
                 drafts={drafts}
                 categories={categories}
@@ -305,10 +377,12 @@ export default function AddPage() {
               <button
                 type="button"
                 onClick={saveDrafts}
-                disabled={status === "saving"}
+                disabled={status === "saving" || drafts.every((d) => d.selected === false)}
                 className="mt-4 w-full rounded-xl bg-brand-600 py-3 font-medium text-white active:bg-brand-700 disabled:opacity-50"
               >
-                {status === "saving" ? "Guardando…" : `Guardar ${drafts.length} movimiento(s)`}
+                {status === "saving"
+                  ? "Guardando…"
+                  : `Guardar ${drafts.filter((d) => d.selected !== false).length} movimiento(s)`}
               </button>
             </>
           )}

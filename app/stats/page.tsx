@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { useTransactions } from "@/lib/useTransactions";
 import { formatMoney } from "@/lib/format";
+import TransactionList from "@/components/TransactionList";
 
 const COLORS = [
   "#16a34a", "#2563eb", "#f59e0b", "#dc2626", "#7c3aed",
@@ -24,8 +25,9 @@ const COLORS = [
 type RangeMode = "month" | "year";
 
 export default function StatsPage() {
-  const { transactions, categoryById, loading } = useTransactions();
+  const { transactions, categories, categoryById, loading, refresh } = useTransactions();
   const [rangeMode, setRangeMode] = useState<RangeMode>("month");
+  const [selectedCat, setSelectedCat] = useState<{ id: number | null; name: string } | null>(null);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -47,14 +49,16 @@ export default function StatsPage() {
     .reduce((s, t) => s + Number(t.amount), 0);
 
   const byCategory = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { id: number | null; name: string; value: number }>();
     for (const t of expenses) {
-      const name = t.category_id ? categoryById[t.category_id]?.name : "Sin categoría";
-      map.set(name || "Sin categoría", (map.get(name || "Sin categoría") || 0) + Number(t.amount));
+      const cat = t.category_id ? categoryById[t.category_id] : undefined;
+      const key = cat ? String(cat.id) : "none";
+      const name = cat?.name || "Sin categoría";
+      const prev = map.get(key);
+      if (prev) prev.value += Number(t.amount);
+      else map.set(key, { id: cat?.id ?? null, name, value: Number(t.amount) });
     }
-    return Array.from(map.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+    return Array.from(map.values()).sort((a, b) => b.value - a.value);
   }, [expenses, categoryById]);
 
   const byMonth = useMemo(() => {
@@ -147,14 +151,20 @@ export default function StatsPage() {
             </ResponsiveContainer>
             <ul className="mt-2 flex flex-col gap-1">
               {byCategory.map((c, i) => (
-                <li key={c.name} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                    {c.name}
-                  </span>
-                  <span className="font-medium text-gray-700">
-                    {formatMoney(c.value)} · {((c.value / totalExpense) * 100).toFixed(0)}%
-                  </span>
+                <li key={c.name}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCat({ id: c.id, name: c.name })}
+                    className="flex w-full items-center justify-between rounded-lg py-1 text-sm active:bg-gray-50"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                      {c.name}
+                    </span>
+                    <span className="font-medium text-gray-700">
+                      {formatMoney(c.value)} · {((c.value / totalExpense) * 100).toFixed(0)}%
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -174,6 +184,34 @@ export default function StatsPage() {
               <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {selectedCat && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          onClick={() => setSelectedCat(null)}
+        >
+          <div
+            className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 pb-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">{selectedCat.name}</h2>
+              <button type="button" onClick={() => setSelectedCat(null)} className="text-sm text-gray-400">
+                Cerrar
+              </button>
+            </div>
+            <p className="mb-2 text-xs text-gray-400">
+              {rangeMode === "month" ? `${monthLabels[month]} ${year}` : year}
+            </p>
+            <TransactionList
+              transactions={expenses.filter((t) => (t.category_id ?? null) === selectedCat.id)}
+              categoryById={categoryById}
+              categories={categories}
+              onChanged={refresh}
+            />
+          </div>
         </div>
       )}
     </div>
