@@ -163,6 +163,7 @@ export default function AddPage() {
   const [status, setStatus] = useState<"idle" | "parsing" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [pesosForUsd, setPesosForUsd] = useState("");
+  const [payDate, setPayDate] = useState("");
 
   const [manual, setManual] = useState<DraftTransaction>({
     date: new Date().toISOString().slice(0, 10),
@@ -194,6 +195,8 @@ export default function AddPage() {
     setPhotoFile(null);
     setPhotoPreview(null);
     setFileKind(null);
+    setPesosForUsd("");
+    setPayDate("");
 
     try {
       const isPdf = original.type === "application/pdf";
@@ -276,6 +279,14 @@ export default function AddPage() {
       )
     );
     setPesosForUsd("");
+  }
+
+  // Para un resumen de tarjeta, la fecha de cada consumo no es la que importa
+  // en el día a día: lo que se siente es el día que se pagó la tarjeta. Este
+  // input pisa la fecha de todos los movimientos cargados con esa fecha.
+  function applyPayDateToAll() {
+    if (!payDate) return;
+    setDrafts((prev) => prev.map((d) => ({ ...d, date: payDate })));
   }
 
   async function uploadReceiptIfNeeded(): Promise<string | null> {
@@ -429,6 +440,30 @@ export default function AddPage() {
 
           {drafts.length > 0 && (
             <>
+              {drafts.length > 1 && (
+                <div className="mb-3 rounded-lg bg-gray-100 px-3 py-3 text-sm text-gray-700">
+                  <p className="mb-2">
+                    Si es un resumen de tarjeta, cada consumo trae la fecha en que lo compraste.
+                    Poné acá el día que pagaste la tarjeta para cargarlos todos con esa fecha.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={payDate}
+                      onChange={(e) => setPayDate(e.target.value)}
+                      className="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyPayDateToAll}
+                      disabled={!payDate}
+                      className="rounded-lg bg-gray-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      Aplicar a todos
+                    </button>
+                  </div>
+                </div>
+              )}
               {usdDrafts.length > 0 && (
                 <div className="mb-3 rounded-lg bg-blue-50 px-3 py-3 text-sm text-blue-900">
                   <p className="mb-2">
