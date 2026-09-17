@@ -33,7 +33,6 @@ export default function StatsPage() {
   const [rangeMode, setRangeMode] = useState<RangeMode>("month");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("expense");
   const [personFilter, setPersonFilter] = useState<PersonFilter>("all");
-  const [selectedCat, setSelectedCat] = useState<{ id: number | null; name: string } | null>(null);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -63,7 +62,6 @@ export default function StatsPage() {
   // mostrando datos viejos.
   useEffect(() => {
     setSelectedCategory(null);
-    setSelectedCat(null);
   }, [rangeMode, year, month, weekAnchor, typeFilter, personFilter]);
 
   const expenses = filtered.filter((t) => t.type === "expense");
@@ -262,7 +260,7 @@ export default function StatsPage() {
                 <li key={c.name}>
                   <button
                     type="button"
-                    onClick={() => setSelectedCat({ id: c.id, name: c.name })}
+                    onClick={() => setSelectedCategory(c.name === selectedCategory ? null : c.name)}
                     className="flex w-full items-center justify-between rounded-lg py-1 text-sm active:bg-gray-50"
                   >
                     <span className="flex items-center gap-2">
@@ -315,34 +313,6 @@ export default function StatsPage() {
               <Bar dataKey="total" fill={typeFilter === "expense" ? "#16a34a" : "#2563eb"} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-      )}
-
-      {selectedCat && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
-          onClick={() => setSelectedCat(null)}
-        >
-          <div
-            className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 pb-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-1 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">{selectedCat.name}</h2>
-              <button type="button" onClick={() => setSelectedCat(null)} className="text-sm text-gray-400">
-                Cerrar
-              </button>
-            </div>
-            <p className="mb-2 text-xs text-gray-400">
-              {rangeMode === "month" ? `${monthLabels[month]} ${year}` : year}
-            </p>
-            <TransactionList
-              transactions={typeItems.filter((t) => (t.category_id ?? null) === selectedCat.id)}
-              categoryById={categoryById}
-              categories={categories}
-              onChanged={refresh}
-            />
-          </div>
         </div>
       )}
     </div>
