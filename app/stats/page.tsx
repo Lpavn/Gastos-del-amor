@@ -24,10 +24,12 @@ const COLORS = [
 ];
 
 type RangeMode = "week" | "month" | "year";
+type TypeFilter = "expense" | "income";
 
 export default function StatsPage() {
   const { transactions, categories, categoryById, loading, refresh } = useTransactions();
   const [rangeMode, setRangeMode] = useState<RangeMode>("month");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("expense");
   const [selectedCat, setSelectedCat] = useState<{ id: number | null; name: string } | null>(null);
 
   const now = new Date();
@@ -49,11 +51,13 @@ export default function StatsPage() {
     });
   }, [transactions, year, month, weekAnchor, rangeMode]);
 
-  // Si cambiamos de período y la categoría seleccionada ya no tiene gastos
-  // ahí, cerramos el detalle en vez de dejarlo mostrando datos viejos.
+  // Si cambiamos de período, tipo (gasto/ingreso) o la categoría seleccionada
+  // ya no tiene datos ahí, cerramos el detalle en vez de dejarlo mostrando
+  // datos viejos.
   useEffect(() => {
     setSelectedCategory(null);
-  }, [rangeMode, year, month, weekAnchor]);
+    setSelectedCat(null);
+  }, [rangeMode, year, month, weekAnchor, typeFilter]);
 
   const expenses = filtered.filter((t) => t.type === "expense");
   const totalExpense = expenses.reduce((s, t) => s + Number(t.amount), 0);
@@ -61,9 +65,12 @@ export default function StatsPage() {
     .filter((t) => t.type === "income")
     .reduce((s, t) => s + Number(t.amount), 0);
 
+  const typeItems = filtered.filter((t) => t.type === typeFilter);
+  const totalForType = typeFilter === "expense" ? totalExpense : totalIncome;
+
   const byCategory = useMemo(() => {
     const map = new Map<string, { id: number | null; name: string; value: number }>();
-    for (const t of expenses) {
+    for (const t of typeItems) {
       const cat = t.category_id ? categoryById[t.category_id] : undefined;
       const key = cat ? String(cat.id) : "none";
       const name = cat?.name || "Sin categoría";
@@ -72,27 +79,29 @@ export default function StatsPage() {
       else map.set(key, { id: cat?.id ?? null, name, value: Number(t.amount) });
     }
     return Array.from(map.values()).sort((a, b) => b.value - a.value);
-  }, [expenses, categoryById]);
+  }, [typeItems, categoryById]);
 
   const categoryTransactions = useMemo(() => {
     if (!selectedCategory) return [];
-    return expenses.filter((t) => {
+    return typeItems.filter((t) => {
       const name = t.category_id ? categoryById[t.category_id]?.name : "Sin categoría";
       return (name || "Sin categoría") === selectedCategory;
     });
-  }, [expenses, categoryById, selectedCategory]);
+  }, [typeItems, categoryById, selectedCategory]);
 
   const byMonth = useMemo(() => {
     if (rangeMode !== "year") return [];
     const map = new Map<number, number>();
-    for (const t of transactions.filter((t) => t.type === "expense")) {
+    for (const t of transactions.filter((t) => t.type === typeFilter)) {
       const d = new Date(t.date + "T00:00:00");
       if (d.getFullYear() !== year) continue;
       map.set(d.getMonth(), (map.get(d.getMonth()) || 0) + Number(t.amount));
     }
     const labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     return labels.map((label, i) => ({ label, total: map.get(i) || 0 }));
-  }, [transactions, year, rangeMode]);
+  }, [transactions, year, rangeMode, typeFilter]);
+
+  const typeLabel = typeFilter === "expense" ? "Gastos" : "Ingresos";
 
   const monthLabels = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -173,6 +182,21 @@ export default function StatsPage() {
         )}
       </div>
 
+      <div className="mb-4 flex w-fit rounded-full bg-gray-100 p-1 text-sm font-medium">
+        <button
+          onClick={() => setTypeFilter("expense")}
+          className={`rounded-full px-3 py-1 ${typeFilter === "expense" ? "bg-white shadow-sm text-brand-700" : "text-gray-500"}`}
+        >
+          Gastos
+        </button>
+        <button
+          onClick={() => setTypeFilter("income")}
+          className={`rounded-full px-3 py-1 ${typeFilter === "income" ? "bg-white shadow-sm text-brand-700" : "text-gray-500"}`}
+        >
+          Ingresos
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-white p-3 shadow-sm">
           <p className="text-xs text-gray-400">Gastos</p>
@@ -185,9 +209,11 @@ export default function StatsPage() {
       </div>
 
       <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Gastos por categoría</h2>
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">{typeLabel} por categoría</h2>
         {byCategory.length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-400">Sin gastos en este período.</p>
+          <p className="py-6 text-center text-sm text-gray-400">
+            Sin {typeFilter === "expense" ? "gastos" : "ingresos"} en este período.
+          </p>
         ) : (
           <>
             <ResponsiveContainer width="100%" height={220}>
@@ -219,7 +245,7 @@ export default function StatsPage() {
                       {c.name}
                     </span>
                     <span className="font-medium text-gray-700">
-                      {formatMoney(c.value)} · {((c.value / totalExpense) * 100).toFixed(0)}%
+                      {formatMoney(c.value)} · {((c.value / totalForType) * 100).toFixed(0)}%
                     </span>
                   </button>
                 </li>
@@ -254,14 +280,14 @@ export default function StatsPage() {
 
       {rangeMode === "year" && (
         <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold text-gray-700">Gastos por mes ({year})</h2>
+          <h2 className="mb-2 text-sm font-semibold text-gray-700">{typeLabel} por mes ({year})</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={byMonth}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="label" fontSize={11} />
               <YAxis fontSize={11} width={40} />
               <Tooltip formatter={(v: number) => formatMoney(v)} />
-              <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="total" fill={typeFilter === "expense" ? "#16a34a" : "#2563eb"} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -286,7 +312,7 @@ export default function StatsPage() {
               {rangeMode === "month" ? `${monthLabels[month]} ${year}` : year}
             </p>
             <TransactionList
-              transactions={expenses.filter((t) => (t.category_id ?? null) === selectedCat.id)}
+              transactions={typeItems.filter((t) => (t.category_id ?? null) === selectedCat.id)}
               categoryById={categoryById}
               categories={categories}
               onChanged={refresh}

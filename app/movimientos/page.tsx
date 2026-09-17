@@ -12,20 +12,29 @@ const MODE_LABEL: Record<PeriodMode, string> = {
   year: "Año",
 };
 
+type TypeFilter = "all" | "expense" | "income";
+
 export default function MovimientosPage() {
   const { transactions, categories, categoryById, loading, refresh } = useTransactions();
   const [mode, setMode] = useState<PeriodMode>("month");
   const [anchor, setAnchor] = useState(new Date());
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
   const { start, end } = useMemo(() => getPeriodRange(mode, anchor), [mode, anchor]);
 
   const periodTransactions = useMemo(
-    () => transactions.filter((t) => isInRange(t.date, start, end)),
-    [transactions, start, end]
+    () =>
+      transactions.filter(
+        (t) => isInRange(t.date, start, end) && (typeFilter === "all" || t.type === typeFilter)
+      ),
+    [transactions, start, end, typeFilter]
   );
 
   const totalExpense = periodTransactions
     .filter((t) => t.type === "expense")
+    .reduce((s, t) => s + Number(t.amount), 0);
+  const totalIncome = periodTransactions
+    .filter((t) => t.type === "income")
     .reduce((s, t) => s + Number(t.amount), 0);
 
   const isCurrentPeriod = useMemo(() => {
@@ -56,6 +65,25 @@ export default function MovimientosPage() {
             }`}
           >
             {MODE_LABEL[m]}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-3 flex w-fit rounded-full bg-gray-100 p-1 text-sm font-medium">
+        {([
+          ["all", "Todos"],
+          ["expense", "Gastos"],
+          ["income", "Ingresos"],
+        ] as [TypeFilter, string][]).map(([tf, label]) => (
+          <button
+            key={tf}
+            type="button"
+            onClick={() => setTypeFilter(tf)}
+            className={`rounded-full px-3 py-1 ${
+              typeFilter === tf ? "bg-white text-brand-700 shadow-sm" : "text-gray-500"
+            }`}
+          >
+            {label}
           </button>
         ))}
       </div>
@@ -95,7 +123,11 @@ export default function MovimientosPage() {
         <span className="text-gray-500">
           {periodTransactions.length} movimiento{periodTransactions.length !== 1 ? "s" : ""}
         </span>
-        <span className="font-semibold text-gray-900">Gastos: {formatMoney(totalExpense)}</span>
+        <span className="font-semibold text-gray-900">
+          {typeFilter !== "income" && `Gastos: ${formatMoney(totalExpense)}`}
+          {typeFilter === "all" && "  ·  "}
+          {typeFilter !== "expense" && `Ingresos: ${formatMoney(totalIncome)}`}
+        </span>
       </div>
 
       <div className="rounded-2xl bg-white px-4 shadow-sm">
