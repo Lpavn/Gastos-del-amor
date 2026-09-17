@@ -60,6 +60,18 @@ create table if not exists category_rules (
   created_at timestamptz not null default now()
 );
 
+-- Edición/borrado en bulk propuesto por el bot de Telegram, pendiente de que
+-- la persona confirme (SI/NO) en el chat. Ver
+-- app/api/telegram-webhook/route.ts.
+create table if not exists bot_pending_actions (
+  chat_id text primary key,
+  action_type text not null check (action_type in ('bulk_edit', 'bulk_delete')),
+  transaction_ids uuid[] not null,
+  changes jsonb,
+  summary text not null,
+  created_at timestamptz not null default now()
+);
+
 -- NOTA DE SEGURIDAD:
 -- Esta app está pensada para uso privado entre dos personas y NO usa autenticación
 -- de usuarios (Supabase Auth). El acceso se protege con un PIN simple a nivel de

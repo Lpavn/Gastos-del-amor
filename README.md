@@ -226,10 +226,19 @@ también `supabase/migration_category_rules.sql` en el SQL Editor de Supabase.
 
 Pensado para quien se olvida de cargar gastos y no tiene forma de automatizar
 por mail (ver sección anterior): un bot de Telegram (gratis, sin límites de
-mensajes) que **(a)** manda un recordatorio una vez por día si esa persona
-todavía no cargó nada, y **(b)** deja cargar un movimiento mandándole un
-mensaje de texto tipo `$15.550 verdulería` — la IA lo interpreta y lo guarda,
-igual que con una foto.
+mensajes) que entiende tres cosas, en lenguaje natural:
+
+- **Cargar un movimiento**: `$15.550 verdulería`, `cobré 20000 changas ayer`.
+- **Preguntar/analizar** (solo lectura, no cambia nada): `cuánto gasté en
+  comida este mes`, `cuál es el balance`, `cuánto gastó Luca en septiembre`.
+- **Editar o borrar varios movimientos a la vez**: `cambiá todos los de Su
+  favorita de 4000 a 3000`, `borrá todos los de Netflix`. Antes de tocar
+  nada, el bot busca qué matchea, te muestra algunos ejemplos y pide que
+  confirmes con **SI** (o cancelás con **NO**) — así una mala interpretación
+  de la IA no te desordena movimientos cargados sin que te des cuenta.
+
+Y además manda un recordatorio una vez por día si esa persona todavía no
+cargó nada.
 
 ### Paso A — Crear el bot con BotFather
 
@@ -289,7 +298,10 @@ el año, sin horario de verano).
 por día, que es justo lo que necesitamos acá.
 
 **Si ya habías corrido `supabase/schema.sql` antes de agregar esto**, corré
-también `supabase/migration_telegram_chat.sql` en el SQL Editor de Supabase.
+también `supabase/migration_telegram_chat.sql` **y**
+`supabase/migration_bot_pending_actions.sql` (esta última guarda el "bulk
+pendiente de confirmar" mientras el bot espera tu SI/NO) en el SQL Editor de
+Supabase.
 
 ## Si la foto con IA deja de funcionar (error "model ... is no longer available")
 
