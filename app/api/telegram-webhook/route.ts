@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { data: categories } = await supabase.from("categories").select("id, name");
+    const { data: categories } = await supabase.from("categories").select("id, name, emoji");
     const categoryId = categories?.find((c) => c.name === parsed.category_name)?.id ?? null;
     const category = categories?.find((c) => c.id === categoryId);
 
