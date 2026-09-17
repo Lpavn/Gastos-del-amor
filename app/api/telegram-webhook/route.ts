@@ -113,8 +113,13 @@ const QUERY_SCHEMA = {
       enum: ["me", "other", "both"],
       description: "'me' si pregunta por SUS PROPIOS gastos/ingresos ('cuánto gasté yo'). 'other' si pregunta por los del otro integrante de la pareja por su nombre. 'both' si pregunta en general (o no lo aclara).",
     },
+    breakdown_by_category: {
+      type: Type.BOOLEAN,
+      description:
+        "true si pregunta CUÁL categoría es la mayor/menor, o pide comparar/rankear categorías entre sí (ej. 'qué categoría fue el mayor gasto', 'gastos por categoría'). false para pedir un total simple.",
+    },
   },
-  required: ["start_date", "end_date", "type", "category_name", "person_scope"],
+  required: ["start_date", "end_date", "type", "category_name", "person_scope", "breakdown_by_category"],
 };
 
 async function parseQuery(text: string, today: string) {
@@ -206,6 +211,11 @@ function hasRealChange(f: any): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  // Fuera del try para poder avisarle al chat si algo revienta más abajo:
+  // sin esto, un error interno queda en silencio total del lado de la
+  // persona (el 500 solo lo ve Telegram, que no reintenta para siempre).
+  let chatIdForErrors: number | undefined;
+
   try {
     // Telegram manda este header con el secret_token que le pasamos al
     // registrar el webhook (ver README), para que nadie más pueda pegarle a
@@ -219,6 +229,7 @@ export async function POST(req: NextRequest) {
     const message = update?.message;
     const chatId: number | undefined = message?.chat?.id;
     const rawText: string | undefined = message?.text;
+    chatIdForErrors = chatId;
 
     if (!chatId || !rawText) {
       return NextResponse.json({ ok: true }); // otro tipo de update, ignorar
@@ -348,6 +359,30 @@ export async function POST(req: NextRequest) {
 
       const { data } = await dbQuery;
       let rows = data || [];
+      const periodLabel = q.start_date === q.end_date ? q.start_date : `${q.start_date} a ${q.end_date}`;
+
+      if (q.breakdown_by_category) {
+        const { data: cats } = await supabase.from("categories").select("id, name, emoji");
+        const rankType = q.type === "income" ? "income" : "expense"; // "both" rankea gastos, es el caso típico
+        const byCat = new Map<string, number>();
+        for (const r of rows.filter((r) => r.type === rankType)) {
+          const cat = cats?.find((c) => c.id === r.category_id);
+          const name = cat ? `${cat.emoji} ${cat.name}` : "🔖 Sin categoría";
+          byCat.set(name, (byCat.get(name) || 0) + Number(r.amount));
+        }
+        const sorted = Array.from(byCat.entries()).sort((a, b) => b[1] - a[1]);
+        const label = rankType === "income" ? "Ingresos" : "Gastos";
+        const reply =
+          sorted.length === 0
+            ? `No encontré movimientos en ese período (${periodLabel}).`
+            : `📊 ${label} por categoría (${periodLabel}):\n${sorted
+                .slice(0, 5)
+                .map(([name, val], i) => `${i + 1}. ${name}: ${formatMoney(val)}`)
+                .join("\n")}`;
+        await sendTelegramMessage(chatId, reply);
+        return NextResponse.json({ ok: true });
+      }
+
       if (q.category_name) {
         const { data: cats } = await supabase.from("categories").select("id, name").eq("name", q.category_name);
         const catId = cats?.[0]?.id;
@@ -356,7 +391,6 @@ export async function POST(req: NextRequest) {
 
       const expenseTotal = rows.filter((r) => r.type === "expense").reduce((s, r) => s + Number(r.amount), 0);
       const incomeTotal = rows.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
-      const periodLabel = q.start_date === q.end_date ? q.start_date : `${q.start_date} a ${q.end_date}`;
       const scopeLabel = q.category_name ? ` en ${q.category_name}` : "";
 
       let reply: string;
@@ -451,6 +485,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error(err);
+    if (chatIdForErrors) {
+      await sendTelegramMessage(chatIdForErrors, "⚠️ Algo falló procesando tu mensaje. Probá de nuevo en un rato.").catch(() => {});
+    }
     return NextResponse.json({ error: err?.message || "Error inesperado." }, { status: 500 });
   }
 }
