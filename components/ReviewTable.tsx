@@ -23,13 +23,25 @@ export default function ReviewTable({
   return (
     <div className="flex flex-col gap-3">
       {drafts.map((d, i) => (
-        <div key={i} className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_COLOR[d.confidence] || ""}`}
-            >
-              Confianza {d.confidence}
-            </span>
+        <div
+          key={i}
+          className={`rounded-xl border p-3 ${
+            d.matched ? "border-amber-200 bg-amber-50/60" : "border-gray-200 bg-white"
+          }`}
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_COLOR[d.confidence] || ""}`}
+              >
+                Confianza {d.confidence}
+              </span>
+              {d.matched && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Ya cargado
+                </span>
+              )}
+            </div>
             <button
               onClick={() => onRemove(i)}
               className="text-xs text-gray-400 underline"
@@ -38,6 +50,17 @@ export default function ReviewTable({
               Quitar
             </button>
           </div>
+
+          {d.matched !== undefined && (
+            <label className="mb-2 flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={d.selected !== false}
+                onChange={(e) => onChange(i, { selected: e.target.checked })}
+              />
+              {d.matched ? "Cargar igual (no era duplicado)" : "Guardar este movimiento"}
+            </label>
+          )}
 
           <input
             value={d.description}

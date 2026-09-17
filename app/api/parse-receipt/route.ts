@@ -50,8 +50,13 @@ const RESPONSE_SCHEMA = {
             enum: ["alta", "media", "baja"],
             description: "Qué tan seguro estás de los datos extraídos (imagen borrosa, monto ambiguo, etc. baja/media).",
           },
+          merchant_key: {
+            type: Type.STRING,
+            description:
+              "El alias, CBU o nombre que identifica a la CONTRAPARTE de una transferencia, o el nombre del comercio, copiado LITERAL de la imagen (no lo resumas). Se usa para detectar si este movimiento ya está cargado. Aplica sobre todo a capturas de una lista de movimientos bancarios (cada línea suele mostrar el alias/CBU o comercio). Si es un ítem desglosado de un ticket de supermercado/farmacia, o la imagen no muestra ese dato, dejalo vacío.",
+          },
         },
-        required: ["date", "type", "amount", "description", "category_name", "confidence"],
+        required: ["date", "type", "amount", "description", "category_name", "confidence", "merchant_key"],
       },
     },
   },

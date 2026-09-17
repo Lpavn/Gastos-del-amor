@@ -41,4 +41,12 @@ export interface DraftTransaction {
   category_name: string;
   paid_by: string;
   confidence: "alta" | "media" | "baja";
+  // Alias, CBU o nombre de comercio tal cual lo leyó la IA de la imagen (para
+  // matchear duplicados contra transaction.merchant_key). Vacío si la imagen
+  // no lo muestra (ej. un ítem suelto de un ticket de supermercado).
+  merchant_key?: string;
+  // Campos client-only, se completan después del parseo al comparar contra
+  // los movimientos ya guardados (ver markDuplicates en app/add/page.tsx).
+  matched?: boolean;
+  selected?: boolean;
 }
