@@ -162,6 +162,7 @@ export default function AddPage() {
   const [fileKind, setFileKind] = useState<"image" | "pdf" | null>(null);
   const [status, setStatus] = useState<"idle" | "parsing" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [pesosForUsd, setPesosForUsd] = useState("");
 
   const [manual, setManual] = useState<DraftTransaction>({
     date: new Date().toISOString().slice(0, 10),
@@ -254,6 +255,27 @@ export default function AddPage() {
   }
   function removeDraft(index: number) {
     setDrafts((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // Consumos que la IA leyó en dólares porque el resumen no da el equivalente
+  // en pesos línea por línea (pasa seguido con Santander). Se guardan sin
+  // cargar hasta que Kiara diga cuánto pagó en total en pesos por ellos: con
+  // eso sacamos el dólar real del día del pago y convertimos cada línea.
+  const usdDrafts = drafts.filter((d) => d.currency === "USD");
+  const usdTotal = usdDrafts.reduce((s, d) => s + Number(d.amount), 0);
+
+  function convertUsdDrafts() {
+    const pesos = Number(pesosForUsd);
+    if (!pesos || pesos <= 0 || usdTotal <= 0) return;
+    const rate = pesos / usdTotal;
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.currency === "USD"
+          ? { ...d, currency: "ARS", usd_amount: d.amount, amount: Math.round(d.amount * rate * 100) / 100 }
+          : d
+      )
+    );
+    setPesosForUsd("");
   }
 
   async function uploadReceiptIfNeeded(): Promise<string | null> {
@@ -407,6 +429,34 @@ export default function AddPage() {
 
           {drafts.length > 0 && (
             <>
+              {usdDrafts.length > 0 && (
+                <div className="mb-3 rounded-lg bg-blue-50 px-3 py-3 text-sm text-blue-900">
+                  <p className="mb-2">
+                    Hay {usdDrafts.length} consumo(s) en dólares por un total de U$S{" "}
+                    {usdTotal.toFixed(2)} (el resumen no da el equivalente en pesos línea por
+                    línea). ¿Cuánto pagaste en total en pesos por estos? Fijate en tu cuenta el
+                    débito real del día de pago.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="Monto en pesos"
+                      value={pesosForUsd}
+                      onChange={(e) => setPesosForUsd(e.target.value)}
+                      className="flex-1 rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={convertUsdDrafts}
+                      disabled={!pesosForUsd || Number(pesosForUsd) <= 0}
+                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      Convertir
+                    </button>
+                  </div>
+                </div>
+              )}
               {drafts.some((d) => d.matched) && (
                 <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
                   {drafts.filter((d) => d.matched).length} de {drafts.length} ya parecen estar
@@ -423,11 +473,17 @@ export default function AddPage() {
               <button
                 type="button"
                 onClick={saveDrafts}
-                disabled={status === "saving" || drafts.every((d) => d.selected === false)}
+                disabled={
+                  status === "saving" ||
+                  drafts.every((d) => d.selected === false) ||
+                  usdDrafts.length > 0
+                }
                 className="mt-4 w-full rounded-xl bg-brand-600 py-3 font-medium text-white active:bg-brand-700 disabled:opacity-50"
               >
                 {status === "saving"
                   ? "Guardando…"
+                  : usdDrafts.length > 0
+                  ? "Convertí los dólares primero"
                   : `Guardar ${drafts.filter((d) => d.selected !== false).length} movimiento(s)`}
               </button>
             </>

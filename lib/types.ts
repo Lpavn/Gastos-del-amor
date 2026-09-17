@@ -45,6 +45,14 @@ export interface DraftTransaction {
   // matchear duplicados contra transaction.merchant_key). Vacío si la imagen
   // no lo muestra (ej. un ítem suelto de un ticket de supermercado).
   merchant_key?: string;
+  // Moneda de "amount". ARS es el caso normal. USD aparece cuando la IA leyó
+  // una línea en dólares de un resumen de tarjeta sin equivalente en pesos
+  // por línea (ver convertUsdDrafts en app/add/page.tsx): en ese caso "amount"
+  // todavía está en dólares y hay que convertirlo a pesos antes de guardar.
+  currency?: "ARS" | "USD";
+  // Monto original en dólares, guardado como referencia después de convertir
+  // (ver convertUsdDrafts). "amount" pasa a tener el valor ya en pesos.
+  usd_amount?: number;
   // Campos client-only, se completan después del parseo al comparar contra
   // los movimientos ya guardados (ver markDuplicates en app/add/page.tsx).
   matched?: boolean;

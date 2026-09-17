@@ -41,6 +41,11 @@ export default function ReviewTable({
                   Ya cargado
                 </span>
               )}
+              {d.currency === "USD" && (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  U$S {Number(d.amount).toFixed(2)} sin convertir
+                </span>
+              )}
             </div>
             <button
               onClick={() => onRemove(i)}
@@ -60,6 +65,13 @@ export default function ReviewTable({
               />
               {d.matched ? "Cargar igual (no era duplicado)" : "Guardar este movimiento"}
             </label>
+          )}
+
+          {d.usd_amount !== undefined && (
+            <p className="mb-2 text-xs text-gray-400">
+              Convertido de U$S {d.usd_amount.toFixed(2)} — dólar a $
+              {(d.amount / d.usd_amount).toFixed(2)}
+            </p>
           )}
 
           <input

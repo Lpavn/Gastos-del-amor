@@ -33,7 +33,13 @@ const RESPONSE_SCHEMA = {
           amount: {
             type: Type.NUMBER,
             description:
-              "Monto total en valor absoluto (positivo), sin símbolo de moneda, SIEMPRE en pesos argentinos. Si es una línea de un resumen de tarjeta de crédito y aparece un monto en dólares u otra moneda extranjera junto con su equivalente en pesos (ej. 'U$S 1,99' y al lado o abajo '$ 2.150,00'), usá el monto en PESOS (el que efectivamente se cobra), nunca el de la moneda extranjera.",
+              "Monto total en valor absoluto (positivo), sin símbolo de moneda, en la moneda indicada en 'currency'. Si es una línea de un resumen de tarjeta de crédito en dólares u otra moneda extranjera y el resumen TAMBIÉN muestra el equivalente ya convertido a pesos para esa misma línea (ej. 'U$S 1,99' y al lado o abajo '$ 2.150,00'), usá ese monto en pesos y marcá currency ARS. Si la línea está en dólares y el resumen NO muestra un equivalente en pesos para ella (solo aparece el monto en U$S), usá el monto en dólares tal cual y marcá currency USD — no inventes ni estimes una conversión.",
+          },
+          currency: {
+            type: Type.STRING,
+            enum: ["ARS", "USD"],
+            description:
+              "Moneda del campo 'amount'. ARS para pesos (el caso normal, y también cuando una línea en dólares ya trae su equivalente en pesos en el resumen). USD solo cuando la línea está expresada en dólares y el resumen no da un equivalente en pesos para esa línea puntual.",
           },
           description: {
             type: Type.STRING,
@@ -56,7 +62,7 @@ const RESPONSE_SCHEMA = {
               "El alias, CBU o nombre que identifica a la CONTRAPARTE de una transferencia, o el nombre del comercio, copiado LITERAL de la imagen (no lo resumas). Se usa para detectar si este movimiento ya está cargado. Aplica sobre todo a capturas de una lista de movimientos bancarios (cada línea suele mostrar el alias/CBU o comercio). Si es un ítem desglosado de un ticket de supermercado/farmacia, o la imagen no muestra ese dato, dejalo vacío.",
           },
         },
-        required: ["date", "type", "amount", "description", "category_name", "confidence", "merchant_key"],
+        required: ["date", "type", "amount", "currency", "description", "category_name", "confidence", "merchant_key"],
       },
     },
   },
@@ -89,7 +95,7 @@ export async function POST(req: NextRequest) {
           parts: [
             { inlineData: { mimeType: mimeType || "image/jpeg", data: image } },
             {
-              text: `Hoy es ${today}. Analizá este archivo (puede ser una foto o un PDF): puede ser un ticket/factura de compra, un comprobante de transferencia, una captura de pantalla con una lista de movimientos bancarios, o el resumen de una tarjeta de crédito (foto o PDF descargado, de una o varias páginas). Extraé todos los movimientos de dinero que encuentres. Si es un ticket de compra con varios productos (por ejemplo un ticket de supermercado), NO lo resumas en un solo gasto: desglosá cada producto como un movimiento individual, usando el nombre del producto como descripción y su precio como monto. Ignorá líneas que no sean productos (subtotal, IVA, "total", vuelto, etc.), esas no van como movimientos aparte. Si es un resumen de tarjeta de crédito, desglosá cada consumo/línea del resumen como un movimiento individual (fecha, comercio, monto), recorriendo TODAS las páginas del PDF si tiene más de una, ignorando líneas de "saldo anterior", "pago realizado", "intereses" salvo que sean un cargo real; y para cada línea en dólares u otra moneda extranjera usá siempre el monto ya convertido a pesos que muestra el resumen, no el monto en la moneda original. Categorías permitidas: ${categoryNames.join(", ")}. Si un dato no está claro, hacé la mejor estimación posible y marcá confidence "baja".`,
+              text: `Hoy es ${today}. Analizá este archivo (puede ser una foto o un PDF): puede ser un ticket/factura de compra, un comprobante de transferencia, una captura de pantalla con una lista de movimientos bancarios, o el resumen de una tarjeta de crédito (foto o PDF descargado, de una o varias páginas). Extraé todos los movimientos de dinero que encuentres. Si es un ticket de compra con varios productos (por ejemplo un ticket de supermercado), NO lo resumas en un solo gasto: desglosá cada producto como un movimiento individual, usando el nombre del producto como descripción y su precio como monto. Ignorá líneas que no sean productos (subtotal, IVA, "total", vuelto, etc.), esas no van como movimientos aparte. Si es un resumen de tarjeta de crédito, desglosá cada consumo/línea del resumen como un movimiento individual (fecha, comercio, monto), recorriendo TODAS las páginas del PDF si tiene más de una, ignorando líneas de "saldo anterior", "pago realizado", "intereses" salvo que sean un cargo real. Para cada línea en dólares u otra moneda extranjera: si el resumen muestra el equivalente ya convertido a pesos para esa línea, usá ese monto en pesos (currency ARS); si la línea SOLO muestra el monto en dólares sin conversión a pesos (caso común: Santander no siempre da el equivalente por línea), usá el monto en dólares tal cual y marcá currency USD — no lo inventes ni lo dejes afuera. Categorías permitidas: ${categoryNames.join(", ")}. Si un dato no está claro, hacé la mejor estimación posible y marcá confidence "baja".`,
             },
           ],
         },
