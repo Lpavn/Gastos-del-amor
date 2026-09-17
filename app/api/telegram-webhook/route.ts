@@ -10,7 +10,6 @@ export const maxDuration = 30;
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const categoryNames = DEFAULT_CATEGORIES.map((c) => c.name);
-const categoryNamesOrEmpty = ["", ...categoryNames];
 
 // Un cambio en bulk que toque más movimientos que esto se rechaza: casi
 // seguro es un filtro mal armado (demasiado amplio) antes que algo que la
@@ -107,7 +106,7 @@ const QUERY_SCHEMA = {
     start_date: { type: Type.STRING, description: "Inicio del período en YYYY-MM-DD. Si no menciona período, usar el primer día del mes actual." },
     end_date: { type: Type.STRING, description: "Fin del período en YYYY-MM-DD. Si no menciona período, usar hoy." },
     type: { type: Type.STRING, enum: ["expense", "income", "both"], description: "Si pregunta por gastos: expense. Por ingresos: income. Por balance o no lo aclara: both." },
-    category_name: { type: Type.STRING, enum: categoryNamesOrEmpty, description: "Categoría por la que filtra, o vacío si no menciona ninguna." },
+    category_name: { type: Type.STRING, enum: categoryNames, description: "Categoría por la que filtra. Omitir este campo si no menciona ninguna." },
     person_scope: {
       type: Type.STRING,
       enum: ["me", "other", "both"],
@@ -119,7 +118,7 @@ const QUERY_SCHEMA = {
         "true si pregunta CUÁL categoría es la mayor/menor, o pide comparar/rankear categorías entre sí (ej. 'qué categoría fue el mayor gasto', 'gastos por categoría'). false para pedir un total simple.",
     },
   },
-  required: ["start_date", "end_date", "type", "category_name", "person_scope", "breakdown_by_category"],
+  required: ["start_date", "end_date", "type", "person_scope", "breakdown_by_category"],
 };
 
 async function parseQuery(text: string, today: string) {
@@ -148,13 +147,13 @@ const BULK_SCHEMA = {
       description: "Palabra o frase que debe aparecer en la descripción o el alias/comercio de los movimientos a buscar (copiada del mensaje). Vacío si no menciona ninguna.",
     },
     filter_amount: { type: Type.NUMBER, description: "Monto exacto por el que filtrar. 0 si no menciona un monto para buscar." },
-    filter_category_name: { type: Type.STRING, enum: categoryNamesOrEmpty, description: "Categoría por la que filtrar. Vacío si no menciona ninguna." },
+    filter_category_name: { type: Type.STRING, enum: categoryNames, description: "Categoría por la que filtrar. Omitir este campo si no menciona ninguna." },
     filter_type: { type: Type.STRING, enum: ["expense", "income", "any"], description: "expense o income si lo aclara, any si no." },
     change_amount: { type: Type.NUMBER, description: "SOLO para bulk_edit: nuevo monto a poner. 0 si no cambia el monto." },
-    change_category_name: { type: Type.STRING, enum: categoryNamesOrEmpty, description: "SOLO para bulk_edit: nueva categoría a poner. Vacío si no la cambia." },
+    change_category_name: { type: Type.STRING, enum: categoryNames, description: "SOLO para bulk_edit: nueva categoría a poner. Omitir este campo si no la cambia." },
     change_description: { type: Type.STRING, description: "SOLO para bulk_edit: nueva descripción a poner. Vacío si no la cambia." },
   },
-  required: ["filter_text", "filter_amount", "filter_category_name", "filter_type", "change_amount", "change_category_name", "change_description"],
+  required: ["filter_text", "filter_amount", "filter_type", "change_amount", "change_description"],
 };
 
 async function parseBulk(text: string) {
