@@ -222,6 +222,75 @@ va a cargar directo con esa categoría, sin pasar por "Otros".
 **Si ya habías corrido `supabase/schema.sql` antes de agregar esto**, corré
 también `supabase/migration_category_rules.sql` en el SQL Editor de Supabase.
 
+## Bot de Telegram (opcional — recordatorio + carga por chat)
+
+Pensado para quien se olvida de cargar gastos y no tiene forma de automatizar
+por mail (ver sección anterior): un bot de Telegram (gratis, sin límites de
+mensajes) que **(a)** manda un recordatorio una vez por día si esa persona
+todavía no cargó nada, y **(b)** deja cargar un movimiento mandándole un
+mensaje de texto tipo `$15.550 verdulería` — la IA lo interpreta y lo guarda,
+igual que con una foto.
+
+### Paso A — Crear el bot con BotFather
+
+1. En Telegram, buscá **@BotFather** → `/newbot` → seguí los pasos (nombre y
+   username del bot).
+2. Te da un **token** (algo como `123456:ABC-...`). Ese va en
+   `TELEGRAM_BOT_TOKEN`.
+
+### Paso B — Variables en Vercel
+
+En Vercel → tu proyecto → **Settings → Environment Variables**, agregá:
+
+| Variable | Valor |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | el token de BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | inventá un texto largo y raro |
+| `CRON_SECRET` | inventá otro texto largo y raro (lo usa Vercel Cron para autenticarse, no hay que hacer nada más con él) |
+| `TELEGRAM_CHAT_ID_PERSON_1` / `_2` | dejalas vacías por ahora, se completan en el Paso D |
+
+**Redeploy** el proyecto para que tomen efecto.
+
+### Paso C — Conectar el bot con tu app (registrar el webhook)
+
+Reemplazá `<TOKEN>` por tu token, `<TU-DOMINIO>` por tu link de Vercel y
+`<WEBHOOK_SECRET>` por el mismo valor de `TELEGRAM_WEBHOOK_SECRET`, y corré
+esto una sola vez (en la terminal, o pegando la URL en el navegador):
+
+```
+https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<TU-DOMINIO>/api/telegram-webhook&secret_token=<WEBHOOK_SECRET>
+```
+
+Si responde `"ok":true`, quedó conectado.
+
+### Paso D — Activar a cada persona
+
+1. Cada persona busca el bot en Telegram (por el username que le pusiste en
+   BotFather) y le manda `/start`.
+2. El bot le responde con su **chat_id** (un número).
+3. Ese número va en `TELEGRAM_CHAT_ID_PERSON_1` (o `_2`, según corresponda a
+   `NEXT_PUBLIC_PERSON_1_NAME` / `_2`) en Vercel → **Redeploy**.
+
+De ahí en más, esa persona puede mandarle al bot mensajes tipo
+`$15.550 verdulería` o `cobré 20000 changas ayer` y se cargan solos, con
+confirmación en el chat. Si el bot no la reconoce (`TELEGRAM_CHAT_ID_PERSON_1`
+mal cargado, por ejemplo), se lo avisa en el mensaje.
+
+### Recordatorio diario
+
+`vercel.json` ya viene con un cron que llama a `/api/telegram-remind` todos
+los días a las 22hs de Argentina (`0 1 * * *`, en UTC). A cada persona
+activada que todavía no cargó ningún movimiento ese día, el bot le manda un
+recordatorio. Si ya cargó algo, no le escribe. Para cambiar el horario, editá
+el `schedule` de `vercel.json` (formato cron, en UTC — Argentina es UTC-3 todo
+el año, sin horario de verano).
+
+**Nota:** los crons de Vercel en el plan gratuito corren como mucho una vez
+por día, que es justo lo que necesitamos acá.
+
+**Si ya habías corrido `supabase/schema.sql` antes de agregar esto**, corré
+también `supabase/migration_telegram_chat.sql` en el SQL Editor de Supabase.
+
 ## Si la foto con IA deja de funcionar (error "model ... is no longer available")
 
 Google discontinúa versiones viejas de Gemini de vez en cuando. Si un día ves

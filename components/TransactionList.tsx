@@ -44,6 +44,7 @@ export default function TransactionList({
                     </p>
                     <p className="text-xs text-gray-400">
                       {t.source === "ai_email" && <span title="Cargado por mail">📧 </span>}
+                      {t.source === "ai_chat" && <span title="Cargado por Telegram">💬 </span>}
                       {new Date(t.date + "T00:00:00").toLocaleDateString("es-AR", {
                         day: "2-digit",
                         month: "short",

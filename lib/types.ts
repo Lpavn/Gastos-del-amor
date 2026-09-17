@@ -17,7 +17,7 @@ export interface Transaction {
   category_id: number | null;
   paid_by: string;
   receipt_url: string | null;
-  source: "manual" | "ai_receipt" | "ai_email";
+  source: "manual" | "ai_receipt" | "ai_email" | "ai_chat";
   merchant_key: string | null; // alias/comercio tal cual lo extrajo la IA del mail (para autocategorizar)
 }
 
