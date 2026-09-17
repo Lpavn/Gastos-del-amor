@@ -5,6 +5,7 @@ import { useTransactions } from "@/lib/useTransactions";
 import TransactionList from "@/components/TransactionList";
 import { formatMoney } from "@/lib/format";
 import { getPeriodRange, shiftPeriod, formatPeriodLabel, isInRange, PeriodMode } from "@/lib/period";
+import { PERSON_1, PERSON_2 } from "@/lib/person";
 
 const MODE_LABEL: Record<PeriodMode, string> = {
   week: "Semana",
@@ -13,21 +14,26 @@ const MODE_LABEL: Record<PeriodMode, string> = {
 };
 
 type TypeFilter = "all" | "expense" | "income";
+type PersonFilter = "all" | string;
 
 export default function MovimientosPage() {
   const { transactions, categories, categoryById, loading, refresh } = useTransactions();
   const [mode, setMode] = useState<PeriodMode>("month");
   const [anchor, setAnchor] = useState(new Date());
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [personFilter, setPersonFilter] = useState<PersonFilter>("all");
 
   const { start, end } = useMemo(() => getPeriodRange(mode, anchor), [mode, anchor]);
 
   const periodTransactions = useMemo(
     () =>
       transactions.filter(
-        (t) => isInRange(t.date, start, end) && (typeFilter === "all" || t.type === typeFilter)
+        (t) =>
+          isInRange(t.date, start, end) &&
+          (typeFilter === "all" || t.type === typeFilter) &&
+          (personFilter === "all" || t.paid_by === personFilter)
       ),
-    [transactions, start, end, typeFilter]
+    [transactions, start, end, typeFilter, personFilter]
   );
 
   const totalExpense = periodTransactions
@@ -81,6 +87,25 @@ export default function MovimientosPage() {
             onClick={() => setTypeFilter(tf)}
             className={`rounded-full px-3 py-1 ${
               typeFilter === tf ? "bg-white text-brand-700 shadow-sm" : "text-gray-500"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-3 flex w-fit rounded-full bg-gray-100 p-1 text-sm font-medium">
+        {([
+          ["all", "Todos"],
+          [PERSON_1, PERSON_1],
+          [PERSON_2, PERSON_2],
+        ] as [PersonFilter, string][]).map(([pf, label]) => (
+          <button
+            key={pf}
+            type="button"
+            onClick={() => setPersonFilter(pf)}
+            className={`rounded-full px-3 py-1 ${
+              personFilter === pf ? "bg-white text-brand-700 shadow-sm" : "text-gray-500"
             }`}
           >
             {label}

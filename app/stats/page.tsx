@@ -17,6 +17,7 @@ import { useTransactions } from "@/lib/useTransactions";
 import { formatMoney } from "@/lib/format";
 import TransactionList from "@/components/TransactionList";
 import { getPeriodRange, shiftPeriod, formatPeriodLabel, isInRange } from "@/lib/period";
+import { PERSON_1, PERSON_2 } from "@/lib/person";
 
 const COLORS = [
   "#16a34a", "#2563eb", "#f59e0b", "#dc2626", "#7c3aed",
@@ -25,11 +26,13 @@ const COLORS = [
 
 type RangeMode = "week" | "month" | "year";
 type TypeFilter = "expense" | "income";
+type PersonFilter = "all" | string;
 
 export default function StatsPage() {
   const { transactions, categories, categoryById, loading, refresh } = useTransactions();
   const [rangeMode, setRangeMode] = useState<RangeMode>("month");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("expense");
+  const [personFilter, setPersonFilter] = useState<PersonFilter>("all");
   const [selectedCat, setSelectedCat] = useState<{ id: number | null; name: string } | null>(null);
 
   const now = new Date();
@@ -39,25 +42,29 @@ export default function StatsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
+    let list = transactions;
     if (rangeMode === "week") {
       const { start, end } = getPeriodRange("week", weekAnchor);
-      return transactions.filter((t) => isInRange(t.date, start, end));
+      list = list.filter((t) => isInRange(t.date, start, end));
+    } else {
+      list = list.filter((t) => {
+        const d = new Date(t.date + "T00:00:00");
+        if (d.getFullYear() !== year) return false;
+        if (rangeMode === "month" && d.getMonth() !== month) return false;
+        return true;
+      });
     }
-    return transactions.filter((t) => {
-      const d = new Date(t.date + "T00:00:00");
-      if (d.getFullYear() !== year) return false;
-      if (rangeMode === "month" && d.getMonth() !== month) return false;
-      return true;
-    });
-  }, [transactions, year, month, weekAnchor, rangeMode]);
+    if (personFilter !== "all") list = list.filter((t) => t.paid_by === personFilter);
+    return list;
+  }, [transactions, year, month, weekAnchor, rangeMode, personFilter]);
 
-  // Si cambiamos de período, tipo (gasto/ingreso) o la categoría seleccionada
-  // ya no tiene datos ahí, cerramos el detalle en vez de dejarlo mostrando
-  // datos viejos.
+  // Si cambiamos de período, tipo (gasto/ingreso), persona o la categoría
+  // seleccionada ya no tiene datos ahí, cerramos el detalle en vez de dejarlo
+  // mostrando datos viejos.
   useEffect(() => {
     setSelectedCategory(null);
     setSelectedCat(null);
-  }, [rangeMode, year, month, weekAnchor, typeFilter]);
+  }, [rangeMode, year, month, weekAnchor, typeFilter, personFilter]);
 
   const expenses = filtered.filter((t) => t.type === "expense");
   const totalExpense = expenses.reduce((s, t) => s + Number(t.amount), 0);
@@ -92,14 +99,16 @@ export default function StatsPage() {
   const byMonth = useMemo(() => {
     if (rangeMode !== "year") return [];
     const map = new Map<number, number>();
-    for (const t of transactions.filter((t) => t.type === typeFilter)) {
+    for (const t of transactions.filter(
+      (t) => t.type === typeFilter && (personFilter === "all" || t.paid_by === personFilter)
+    )) {
       const d = new Date(t.date + "T00:00:00");
       if (d.getFullYear() !== year) continue;
       map.set(d.getMonth(), (map.get(d.getMonth()) || 0) + Number(t.amount));
     }
     const labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     return labels.map((label, i) => ({ label, total: map.get(i) || 0 }));
-  }, [transactions, year, rangeMode, typeFilter]);
+  }, [transactions, year, rangeMode, typeFilter, personFilter]);
 
   const typeLabel = typeFilter === "expense" ? "Gastos" : "Ingresos";
 
@@ -195,6 +204,22 @@ export default function StatsPage() {
         >
           Ingresos
         </button>
+      </div>
+
+      <div className="mb-4 flex w-fit rounded-full bg-gray-100 p-1 text-sm font-medium">
+        {([
+          ["all", "Todos"],
+          [PERSON_1, PERSON_1],
+          [PERSON_2, PERSON_2],
+        ] as [PersonFilter, string][]).map(([pf, label]) => (
+          <button
+            key={pf}
+            onClick={() => setPersonFilter(pf)}
+            className={`rounded-full px-3 py-1 ${personFilter === pf ? "bg-white shadow-sm text-brand-700" : "text-gray-500"}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
