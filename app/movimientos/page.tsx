@@ -6,6 +6,7 @@ import TransactionList from "@/components/TransactionList";
 import { formatMoney } from "@/lib/format";
 import { getPeriodRange, shiftPeriod, formatPeriodLabel, isInRange, PeriodMode } from "@/lib/period";
 import { PERSON_1, PERSON_2 } from "@/lib/person";
+import { Category, Transaction } from "@/lib/types";
 
 const MODE_LABEL: Record<PeriodMode, string> = {
   week: "Semana",
@@ -15,6 +16,30 @@ const MODE_LABEL: Record<PeriodMode, string> = {
 
 type TypeFilter = "all" | "expense" | "income";
 type PersonFilter = "all" | string;
+
+// Para conciliar contra el resumen del banco (ej. un excel exportado del
+// home banking): un CSV con lo que ya está cargado en la app, para
+// comparar fecha a fecha y monto a monto.
+function exportCsv(transactions: Transaction[], categoryById: Record<number, Category>) {
+  const header = ["fecha", "tipo", "monto", "descripcion", "categoria", "pagado_por"];
+  const rows = transactions.map((t) => [
+    t.date,
+    t.type,
+    String(t.amount),
+    t.description,
+    (t.category_id ? categoryById[t.category_id]?.name : "") || "",
+    t.paid_by,
+  ]);
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const csv = [header, ...rows].map((r) => r.map(escape).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `movimientos-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function MovimientosPage() {
   const { transactions, categories, categoryById, loading, refresh } = useTransactions();
@@ -154,6 +179,15 @@ export default function MovimientosPage() {
           {typeFilter !== "expense" && `Ingresos: ${formatMoney(totalIncome)}`}
         </span>
       </div>
+
+      <button
+        type="button"
+        onClick={() => exportCsv(periodTransactions, categoryById)}
+        disabled={periodTransactions.length === 0}
+        className="mb-3 w-full rounded-xl bg-white py-2 text-sm font-medium text-brand-600 shadow-sm disabled:opacity-50"
+      >
+        ⬇️ Exportar CSV ({MODE_LABEL[mode].toLowerCase()} actual)
+      </button>
 
       <div className="rounded-2xl bg-white px-4 shadow-sm">
         <TransactionList
