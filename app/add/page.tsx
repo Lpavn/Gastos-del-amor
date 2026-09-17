@@ -92,6 +92,21 @@ function compressImage(
   });
 }
 
+// El PDF va tal cual (sin recomprimir como imagen): mantiene todas las
+// páginas y el texto nítido, ideal para un resumen de tarjeta de varias hojas.
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string; // data:<mime>;base64,<data>
+      const [, base64] = result.split(",");
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // Compara los movimientos que acaba de leer la IA (foto de un ticket, o una
 // captura con una lista de movimientos del banco) contra lo que ya está
 // guardado en la base, para detectar cuáles ya se cargaron antes (por
@@ -144,8 +159,11 @@ export default function AddPage() {
   const [drafts, setDrafts] = useState<DraftTransaction[]>([]);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [fileKind, setFileKind] = useState<"image" | "pdf" | null>(null);
   const [status, setStatus] = useState<"idle" | "parsing" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [pesosForUsd, setPesosForUsd] = useState("");
+  const [payDate, setPayDate] = useState("");
 
   const [manual, setManual] = useState<DraftTransaction>({
     date: new Date().toISOString().slice(0, 10),
@@ -176,11 +194,30 @@ export default function AddPage() {
     setDrafts([]);
     setPhotoFile(null);
     setPhotoPreview(null);
+    setFileKind(null);
+    setPesosForUsd("");
+    setPayDate("");
 
     try {
-      const { file, base64, mimeType } = await compressImage(original);
+      const isPdf = original.type === "application/pdf";
+      let file: File;
+      let base64: string;
+      let mimeType: string;
+
+      if (isPdf) {
+        if (original.size > 4.2 * 1024 * 1024) {
+          throw new Error("El PDF pesa demasiado (máx ~4MB). Probá exportar menos páginas o el resumen simplificado.");
+        }
+        file = original;
+        base64 = await readFileAsBase64(original);
+        mimeType = "application/pdf";
+      } else {
+        ({ file, base64, mimeType } = await compressImage(original));
+      }
+
       setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
+      setFileKind(isPdf ? "pdf" : "image");
+      setPhotoPreview(isPdf ? file.name : URL.createObjectURL(file));
 
       const res = await fetch("/api/parse-receipt", {
         method: "POST",
@@ -194,11 +231,13 @@ export default function AddPage() {
       } catch {
         throw new Error(
           res.status === 413
-            ? "La foto sigue siendo muy pesada. Probá sacarla de nuevo o con menos zoom."
-            : "Hubo un problema de conexión al procesar la foto. Probá de nuevo."
+            ? isPdf
+              ? "El PDF sigue siendo muy pesado. Probá exportar menos páginas."
+              : "La foto sigue siendo muy pesada. Probá sacarla de nuevo o con menos zoom."
+            : "Hubo un problema de conexión al procesar el archivo. Probá de nuevo."
         );
       }
-      if (!res.ok) throw new Error(data.error || "No se pudo leer la imagen.");
+      if (!res.ok) throw new Error(data.error || "No se pudo leer el archivo.");
 
       const current = getCurrentPerson() || PERSON_1;
       const withPerson = (data.transactions || []).map((t: DraftTransaction) => ({
@@ -210,7 +249,7 @@ export default function AddPage() {
       setStatus("idle");
     } catch (err: any) {
       setStatus("error");
-      setErrorMsg(err.message || "Error al procesar la imagen.");
+      setErrorMsg(err.message || "Error al procesar el archivo.");
     }
   }
 
@@ -219,6 +258,35 @@ export default function AddPage() {
   }
   function removeDraft(index: number) {
     setDrafts((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // Consumos que la IA leyó en dólares porque el resumen no da el equivalente
+  // en pesos línea por línea (pasa seguido con Santander). Se guardan sin
+  // cargar hasta que Kiara diga cuánto pagó en total en pesos por ellos: con
+  // eso sacamos el dólar real del día del pago y convertimos cada línea.
+  const usdDrafts = drafts.filter((d) => d.currency === "USD");
+  const usdTotal = usdDrafts.reduce((s, d) => s + Number(d.amount), 0);
+
+  function convertUsdDrafts() {
+    const pesos = Number(pesosForUsd);
+    if (!pesos || pesos <= 0 || usdTotal <= 0) return;
+    const rate = pesos / usdTotal;
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.currency === "USD"
+          ? { ...d, currency: "ARS", usd_amount: d.amount, amount: Math.round(d.amount * rate * 100) / 100 }
+          : d
+      )
+    );
+    setPesosForUsd("");
+  }
+
+  // Para un resumen de tarjeta, la fecha de cada consumo no es la que importa
+  // en el día a día: lo que se siente es el día que se pagó la tarjeta. Este
+  // input pisa la fecha de todos los movimientos cargados con esa fecha.
+  function applyPayDateToAll() {
+    if (!payDate) return;
+    setDrafts((prev) => prev.map((d) => ({ ...d, date: payDate })));
   }
 
   async function uploadReceiptIfNeeded(): Promise<string | null> {
@@ -325,42 +393,105 @@ export default function AddPage() {
             >
               <span className="text-3xl">📸</span>
               <span className="text-sm">Sacar foto o subir ticket / comprobante</span>
+              <span className="text-xs text-gray-400">
+                También podés subir el PDF del resumen de tu tarjeta
+              </span>
             </button>
           )}
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             className="hidden"
             onChange={handleFile}
           />
 
           {photoPreview && (
             <div className="mb-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photoPreview} alt="Foto cargada" className="max-h-48 w-full rounded-xl object-cover" />
+              {fileKind === "pdf" ? (
+                <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-600">
+                  <span className="text-xl">📄</span>
+                  <span className="truncate">{photoPreview}</span>
+                </div>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoPreview} alt="Foto cargada" className="max-h-48 w-full rounded-xl object-cover" />
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setPhotoFile(null);
                   setPhotoPreview(null);
+                  setFileKind(null);
                   setDrafts([]);
                 }}
                 className="mt-2 text-xs text-gray-400 underline"
               >
-                Sacar otra foto
+                {fileKind === "pdf" ? "Subir otro archivo" : "Sacar otra foto"}
               </button>
             </div>
           )}
 
           {status === "parsing" && (
             <p className="py-4 text-center text-sm text-gray-500">
-              Leyendo la imagen con IA…
+              Leyendo {fileKind === "pdf" ? "el PDF" : "la imagen"} con IA…
             </p>
           )}
 
           {drafts.length > 0 && (
             <>
+              {drafts.length > 1 && (
+                <div className="mb-3 rounded-lg bg-gray-100 px-3 py-3 text-sm text-gray-700">
+                  <p className="mb-2">
+                    Si es un resumen de tarjeta, cada consumo trae la fecha en que lo compraste.
+                    Poné acá el día que pagaste la tarjeta para cargarlos todos con esa fecha.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={payDate}
+                      onChange={(e) => setPayDate(e.target.value)}
+                      className="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyPayDateToAll}
+                      disabled={!payDate}
+                      className="rounded-lg bg-gray-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      Aplicar a todos
+                    </button>
+                  </div>
+                </div>
+              )}
+              {usdDrafts.length > 0 && (
+                <div className="mb-3 rounded-lg bg-blue-50 px-3 py-3 text-sm text-blue-900">
+                  <p className="mb-2">
+                    Hay {usdDrafts.length} consumo(s) en dólares por un total de U$S{" "}
+                    {usdTotal.toFixed(2)} (el resumen no da el equivalente en pesos línea por
+                    línea). ¿Cuánto pagaste en total en pesos por estos? Fijate en tu cuenta el
+                    débito real del día de pago.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="Monto en pesos"
+                      value={pesosForUsd}
+                      onChange={(e) => setPesosForUsd(e.target.value)}
+                      className="flex-1 rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={convertUsdDrafts}
+                      disabled={!pesosForUsd || Number(pesosForUsd) <= 0}
+                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      Convertir
+                    </button>
+                  </div>
+                </div>
+              )}
               {drafts.some((d) => d.matched) && (
                 <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
                   {drafts.filter((d) => d.matched).length} de {drafts.length} ya parecen estar
@@ -377,11 +508,17 @@ export default function AddPage() {
               <button
                 type="button"
                 onClick={saveDrafts}
-                disabled={status === "saving" || drafts.every((d) => d.selected === false)}
+                disabled={
+                  status === "saving" ||
+                  drafts.every((d) => d.selected === false) ||
+                  usdDrafts.length > 0
+                }
                 className="mt-4 w-full rounded-xl bg-brand-600 py-3 font-medium text-white active:bg-brand-700 disabled:opacity-50"
               >
                 {status === "saving"
                   ? "Guardando…"
+                  : usdDrafts.length > 0
+                  ? "Convertí los dólares primero"
                   : `Guardar ${drafts.filter((d) => d.selected !== false).length} movimiento(s)`}
               </button>
             </>
