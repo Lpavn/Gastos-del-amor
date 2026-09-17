@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   PieChart,
   Pie,
@@ -15,30 +15,44 @@ import {
 } from "recharts";
 import { useTransactions } from "@/lib/useTransactions";
 import { formatMoney } from "@/lib/format";
+import TransactionList from "@/components/TransactionList";
+import { getPeriodRange, shiftPeriod, formatPeriodLabel, isInRange } from "@/lib/period";
 
 const COLORS = [
   "#16a34a", "#2563eb", "#f59e0b", "#dc2626", "#7c3aed",
   "#0891b2", "#db2777", "#65a30d", "#ea580c", "#4338ca",
 ];
 
-type RangeMode = "month" | "year";
+type RangeMode = "week" | "month" | "year";
 
 export default function StatsPage() {
-  const { transactions, categoryById, loading } = useTransactions();
+  const { transactions, categories, categoryById, loading, refresh } = useTransactions();
   const [rangeMode, setRangeMode] = useState<RangeMode>("month");
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth()); // 0-11
+  const [weekAnchor, setWeekAnchor] = useState(now);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
+    if (rangeMode === "week") {
+      const { start, end } = getPeriodRange("week", weekAnchor);
+      return transactions.filter((t) => isInRange(t.date, start, end));
+    }
     return transactions.filter((t) => {
       const d = new Date(t.date + "T00:00:00");
       if (d.getFullYear() !== year) return false;
       if (rangeMode === "month" && d.getMonth() !== month) return false;
       return true;
     });
-  }, [transactions, year, month, rangeMode]);
+  }, [transactions, year, month, weekAnchor, rangeMode]);
+
+  // Si cambiamos de período y la categoría seleccionada ya no tiene gastos
+  // ahí, cerramos el detalle en vez de dejarlo mostrando datos viejos.
+  useEffect(() => {
+    setSelectedCategory(null);
+  }, [rangeMode, year, month, weekAnchor]);
 
   const expenses = filtered.filter((t) => t.type === "expense");
   const totalExpense = expenses.reduce((s, t) => s + Number(t.amount), 0);
@@ -56,6 +70,14 @@ export default function StatsPage() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
   }, [expenses, categoryById]);
+
+  const categoryTransactions = useMemo(() => {
+    if (!selectedCategory) return [];
+    return expenses.filter((t) => {
+      const name = t.category_id ? categoryById[t.category_id]?.name : "Sin categoría";
+      return (name || "Sin categoría") === selectedCategory;
+    });
+  }, [expenses, categoryById, selectedCategory]);
 
   const byMonth = useMemo(() => {
     if (rangeMode !== "year") return [];
@@ -79,8 +101,14 @@ export default function StatsPage() {
     <div className="px-4 pt-6">
       <h1 className="mb-4 text-xl font-bold text-gray-900">Estadísticas</h1>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <div className="flex rounded-full bg-gray-100 p-1 text-sm font-medium">
+          <button
+            onClick={() => setRangeMode("week")}
+            className={`rounded-full px-3 py-1 ${rangeMode === "week" ? "bg-white shadow-sm text-brand-700" : "text-gray-500"}`}
+          >
+            Semana
+          </button>
           <button
             onClick={() => setRangeMode("month")}
             className={`rounded-full px-3 py-1 ${rangeMode === "month" ? "bg-white shadow-sm text-brand-700" : "text-gray-500"}`}
@@ -95,6 +123,28 @@ export default function StatsPage() {
           </button>
         </div>
 
+        {rangeMode === "week" && (
+          <div className="flex items-center gap-1 rounded-full bg-white px-1 shadow-sm">
+            <button
+              onClick={() => setWeekAnchor(shiftPeriod("week", weekAnchor, -1))}
+              className="px-2 py-1 text-gray-400 active:text-gray-600"
+              aria-label="Semana anterior"
+            >
+              ‹
+            </button>
+            <span className="px-1 text-sm font-medium text-gray-700">
+              {formatPeriodLabel("week", weekAnchor)}
+            </span>
+            <button
+              onClick={() => setWeekAnchor(shiftPeriod("week", weekAnchor, 1))}
+              className="px-2 py-1 text-gray-400 active:text-gray-600"
+              aria-label="Semana siguiente"
+            >
+              ›
+            </button>
+          </div>
+        )}
+
         {rangeMode === "month" && (
           <select
             value={month}
@@ -107,15 +157,17 @@ export default function StatsPage() {
           </select>
         )}
 
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          className="rounded-full border border-gray-200 bg-white px-3 py-1 text-sm"
-        >
-          {[year - 1, year, year + 1].map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+        {rangeMode !== "week" && (
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="rounded-full border border-gray-200 bg-white px-3 py-1 text-sm"
+          >
+            {[year - 1, year, year + 1].map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -138,8 +190,14 @@ export default function StatsPage() {
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie data={byCategory} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>
-                  {byCategory.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  {byCategory.map((c, i) => (
+                    <Cell
+                      key={i}
+                      fill={COLORS[i % COLORS.length]}
+                      opacity={!selectedCategory || selectedCategory === c.name ? 1 : 0.35}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setSelectedCategory(c.name === selectedCategory ? null : c.name)}
+                    />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v: number) => formatMoney(v)} />
@@ -147,20 +205,51 @@ export default function StatsPage() {
             </ResponsiveContainer>
             <ul className="mt-2 flex flex-col gap-1">
               {byCategory.map((c, i) => (
-                <li key={c.name} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                    {c.name}
-                  </span>
-                  <span className="font-medium text-gray-700">
-                    {formatMoney(c.value)} · {((c.value / totalExpense) * 100).toFixed(0)}%
-                  </span>
+                <li key={c.name}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(c.name === selectedCategory ? null : c.name)}
+                    className={`flex w-full items-center justify-between rounded-lg px-1 py-1 text-sm ${
+                      selectedCategory === c.name ? "bg-gray-100" : ""
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                      {c.name}
+                    </span>
+                    <span className="font-medium text-gray-700">
+                      {formatMoney(c.value)} · {((c.value / totalExpense) * 100).toFixed(0)}%
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
           </>
         )}
       </div>
+
+      {selectedCategory && (
+        <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">
+              {selectedCategory} · {formatMoney(categoryTransactions.reduce((s, t) => s + Number(t.amount), 0))}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory(null)}
+              className="px-2 text-sm text-gray-400 active:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+          <TransactionList
+            transactions={categoryTransactions}
+            categoryById={categoryById}
+            categories={categories}
+            onChanged={refresh}
+          />
+        </div>
+      )}
 
       {rangeMode === "year" && (
         <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm">

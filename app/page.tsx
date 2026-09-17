@@ -33,6 +33,13 @@ export default function DashboardPage() {
           onChanged={refresh}
         />
       </div>
+
+      <Link
+        href="/movimientos"
+        className="mt-2 block rounded-2xl bg-white py-3 text-center text-sm font-medium text-brand-600 shadow-sm"
+      >
+        Ver historial completo →
+      </Link>
     </div>
   );
 }

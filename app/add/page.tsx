@@ -73,6 +73,21 @@ function compressImage(
   });
 }
 
+// El PDF va tal cual (sin recomprimir como imagen): mantiene todas las
+// páginas y el texto nítido, ideal para un resumen de tarjeta de varias hojas.
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string; // data:<mime>;base64,<data>
+      const [, base64] = result.split(",");
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function AddPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +97,7 @@ export default function AddPage() {
   const [drafts, setDrafts] = useState<DraftTransaction[]>([]);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [fileKind, setFileKind] = useState<"image" | "pdf" | null>(null);
   const [status, setStatus] = useState<"idle" | "parsing" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -114,11 +130,28 @@ export default function AddPage() {
     setDrafts([]);
     setPhotoFile(null);
     setPhotoPreview(null);
+    setFileKind(null);
 
     try {
-      const { file, base64, mimeType } = await compressImage(original);
+      const isPdf = original.type === "application/pdf";
+      let file: File;
+      let base64: string;
+      let mimeType: string;
+
+      if (isPdf) {
+        if (original.size > 4.2 * 1024 * 1024) {
+          throw new Error("El PDF pesa demasiado (máx ~4MB). Probá exportar menos páginas o el resumen simplificado.");
+        }
+        file = original;
+        base64 = await readFileAsBase64(original);
+        mimeType = "application/pdf";
+      } else {
+        ({ file, base64, mimeType } = await compressImage(original));
+      }
+
       setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
+      setFileKind(isPdf ? "pdf" : "image");
+      setPhotoPreview(isPdf ? file.name : URL.createObjectURL(file));
 
       const res = await fetch("/api/parse-receipt", {
         method: "POST",
@@ -132,11 +165,13 @@ export default function AddPage() {
       } catch {
         throw new Error(
           res.status === 413
-            ? "La foto sigue siendo muy pesada. Probá sacarla de nuevo o con menos zoom."
-            : "Hubo un problema de conexión al procesar la foto. Probá de nuevo."
+            ? isPdf
+              ? "El PDF sigue siendo muy pesado. Probá exportar menos páginas."
+              : "La foto sigue siendo muy pesada. Probá sacarla de nuevo o con menos zoom."
+            : "Hubo un problema de conexión al procesar el archivo. Probá de nuevo."
         );
       }
-      if (!res.ok) throw new Error(data.error || "No se pudo leer la imagen.");
+      if (!res.ok) throw new Error(data.error || "No se pudo leer el archivo.");
 
       const current = getCurrentPerson() || PERSON_1;
       const withPerson = (data.transactions || []).map((t: DraftTransaction) => ({
@@ -147,7 +182,7 @@ export default function AddPage() {
       setStatus("idle");
     } catch (err: any) {
       setStatus("error");
-      setErrorMsg(err.message || "Error al procesar la imagen.");
+      setErrorMsg(err.message || "Error al procesar el archivo.");
     }
   }
 
@@ -260,37 +295,48 @@ export default function AddPage() {
             >
               <span className="text-3xl">📸</span>
               <span className="text-sm">Sacar foto o subir ticket / comprobante</span>
+              <span className="text-xs text-gray-400">
+                También podés subir el PDF del resumen de tu tarjeta
+              </span>
             </button>
           )}
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             className="hidden"
             onChange={handleFile}
           />
 
           {photoPreview && (
             <div className="mb-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photoPreview} alt="Foto cargada" className="max-h-48 w-full rounded-xl object-cover" />
+              {fileKind === "pdf" ? (
+                <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-600">
+                  <span className="text-xl">📄</span>
+                  <span className="truncate">{photoPreview}</span>
+                </div>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoPreview} alt="Foto cargada" className="max-h-48 w-full rounded-xl object-cover" />
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setPhotoFile(null);
                   setPhotoPreview(null);
+                  setFileKind(null);
                   setDrafts([]);
                 }}
                 className="mt-2 text-xs text-gray-400 underline"
               >
-                Sacar otra foto
+                {fileKind === "pdf" ? "Subir otro archivo" : "Sacar otra foto"}
               </button>
             </div>
           )}
 
           {status === "parsing" && (
             <p className="py-4 text-center text-sm text-gray-500">
-              Leyendo la imagen con IA…
+              Leyendo {fileKind === "pdf" ? "el PDF" : "la imagen"} con IA…
             </p>
           )}
 
