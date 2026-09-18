@@ -28,6 +28,24 @@ function getAi(): GoogleGenAI {
   return ai;
 }
 
+// Gemini a veces devuelve 429 (cuota) o 503 (saturado) de forma pasajera:
+// reintentamos hasta 3 veces en total con una pausa corta, y si sigue
+// fallando el error sube y el handler avisa al chat.
+const MAX_GEMINI_ATTEMPTS = 3;
+const TRANSIENT_STATUSES = [429, 500, 503, 504];
+
+async function generateWithRetry(params: Parameters<GoogleGenAI["models"]["generateContent"]>[0]) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await getAi().models.generateContent(params);
+    } catch (err: any) {
+      const transient = TRANSIENT_STATUSES.includes(err?.status);
+      if (!transient || attempt >= MAX_GEMINI_ATTEMPTS) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 1) Clasificar qué quiere la persona: cargar un movimiento, preguntar/
 // analizar (solo lectura), o editar/borrar varios movimientos a la vez.
@@ -50,7 +68,7 @@ const INTENT_SCHEMA = {
 };
 
 async function classifyIntent(text: string): Promise<"log" | "query" | "bulk_edit" | "bulk_delete" | "unclear"> {
-  const response = await getAi().models.generateContent({
+  const response = await generateWithRetry({
     model: MODEL,
     contents: [{ role: "user", parts: [{ text: `Mensaje de chat: "${text.slice(0, 500)}"` }] }],
     config: { responseMimeType: "application/json", responseSchema: INTENT_SCHEMA },
@@ -83,7 +101,7 @@ const LOG_SCHEMA = {
 };
 
 async function parseLog(text: string, today: string) {
-  const response = await getAi().models.generateContent({
+  const response = await generateWithRetry({
     model: MODEL,
     contents: [
       {
@@ -122,7 +140,7 @@ const QUERY_SCHEMA = {
 };
 
 async function parseQuery(text: string, today: string) {
-  const response = await getAi().models.generateContent({
+  const response = await generateWithRetry({
     model: MODEL,
     contents: [
       {
@@ -157,7 +175,7 @@ const BULK_SCHEMA = {
 };
 
 async function parseBulk(text: string) {
-  const response = await getAi().models.generateContent({
+  const response = await generateWithRetry({
     model: MODEL,
     contents: [
       {
@@ -331,7 +349,7 @@ export async function POST(req: NextRequest) {
       ]);
       if (error) {
         await sendTelegramMessage(chatId, "Se pudo leer el mensaje pero no se guardó: " + error.message);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ ok: false, error: error.message }); // 200: evita que Telegram reintente
       }
       const sign = parsed.type === "income" ? "+" : "-";
       await sendTelegramMessage(
@@ -485,8 +503,10 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error(err);
     if (chatIdForErrors) {
-      await sendTelegramMessage(chatIdForErrors, "⚠️ Algo falló procesando tu mensaje. Probá de nuevo en un rato.").catch(() => {});
+      await sendTelegramMessage(chatIdForErrors, "⚠️ No pude terminar la transacción, intentá más tarde.").catch(() => {});
     }
-    return NextResponse.json({ error: err?.message || "Error inesperado." }, { status: 500 });
+    // 200 a propósito: si devolvemos 5xx, Telegram reintenta el mismo mensaje
+    // una y otra vez y el usuario recibiría el aviso repetido.
+    return NextResponse.json({ ok: false, error: err?.message || "Error inesperado." });
   }
 }
