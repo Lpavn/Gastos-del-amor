@@ -59,7 +59,7 @@ const RESPONSE_SCHEMA = {
           merchant_key: {
             type: Type.STRING,
             description:
-              "El alias, CBU o nombre que identifica a la CONTRAPARTE de una transferencia, o el nombre del comercio, copiado LITERAL de la imagen (no lo resumas). Se usa para detectar si este movimiento ya está cargado. Aplica sobre todo a capturas de una lista de movimientos bancarios (cada línea suele mostrar el alias/CBU o comercio). Si es un ítem desglosado de un ticket de supermercado/farmacia, o la imagen no muestra ese dato, dejalo vacío.",
+              "El alias, CBU o nombre que identifica a la CONTRAPARTE de una transferencia, o el nombre del comercio, copiado de la imagen (no lo resumas ni lo traduzcas) pero SOLO la parte fija que identifica siempre a esa misma contraparte — SIN número de operación/referencia, sucursal, fecha ni monto (esos cambian en cada compra al mismo comercio y por eso rompen la detección de 'ya cargado'/reglas de categoría). Ej: de 'EL PUENTE SA SUC 0245 Nro Op 88213456' usá 'EL PUENTE SA', no la línea completa. Se usa para detectar si este movimiento ya está cargado. Aplica sobre todo a capturas de una lista de movimientos bancarios (cada línea suele mostrar el alias/CBU o comercio). Si es un ítem desglosado de un ticket de supermercado/farmacia, o la imagen no muestra ese dato, dejalo vacío.",
           },
         },
         required: ["date", "type", "amount", "currency", "description", "category_name", "confidence", "merchant_key"],

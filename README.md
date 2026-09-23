@@ -222,6 +222,16 @@ va a cargar directo con esa categoría, sin pasar por "Otros".
 **Si ya habías corrido `supabase/schema.sql` antes de agregar esto**, corré
 también `supabase/migration_category_rules.sql` en el SQL Editor de Supabase.
 
+**Si una regla que creaste dejó de reconocer un comercio** (vuelve a caer en
+"Otros" con la descripción cruda): el alias/comercio que copia la IA a veces
+incluye número de operación, sucursal o fecha, que cambian en cada compra al
+mismo lugar — antes eso rompía el matcheo. Corré
+`supabase/migration_normalize_merchant_keys.sql` en el SQL Editor una vez
+para limpiar lo ya guardado (lee el comentario del archivo: si falla por
+`match_key` duplicado, hay dos reglas viejas que quedaron iguales al
+limpiarlas, borrá una a mano y corré de nuevo). De ahí en más se guarda ya
+limpio.
+
 ## Bot de Telegram (opcional — recordatorio + carga por chat)
 
 Pensado para quien se olvida de cargar gastos y no tiene forma de automatizar

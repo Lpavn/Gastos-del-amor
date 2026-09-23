@@ -73,7 +73,7 @@ const RESPONSE_SCHEMA = {
           merchant_key: {
             type: Type.STRING,
             description:
-              "El alias, CBU o nombre que identifica a la CONTRAPARTE de la transferencia, o el nombre del comercio en una compra, copiado LITERAL del mail (no lo resumas ni lo traduzcas). Si es una transferencia ENVIADA: el alias/CBU/nombre del destinatario (después de 'Alias:', 'Para:', 'Destino:'). Si es una transferencia RECIBIDA: el alias/CBU/nombre de quien la envió (después de 'De:', 'Origen:', 'Remitente:'). Si es una compra: el nombre del comercio. Si el mail no lo menciona, dejalo vacío.",
+              "El alias, CBU o nombre que identifica a la CONTRAPARTE de la transferencia, o el nombre del comercio en una compra, copiado del mail (no lo resumas ni lo traduzcas) pero SOLO la parte fija que identifica siempre a esa misma contraparte — SIN número de operación/referencia, sucursal, fecha ni monto (esos cambian en cada compra al mismo comercio y por eso rompen la detección de 'ya cargado'/reglas de categoría). Ej: del mail 'Compra en EL PUENTE SA SUC 0245 Nro Op 88213456' usá 'EL PUENTE SA', no la línea completa. Si es una transferencia ENVIADA: el alias/CBU/nombre del destinatario (después de 'Alias:', 'Para:', 'Destino:'). Si es una transferencia RECIBIDA: el alias/CBU/nombre de quien la envió (después de 'De:', 'Origen:', 'Remitente:'). Si el mail no lo menciona, dejalo vacío.",
           },
           is_credit_card_bill_payment: {
             type: Type.BOOLEAN,
