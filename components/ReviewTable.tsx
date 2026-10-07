@@ -2,6 +2,7 @@
 
 import { Category, DraftTransaction } from "@/lib/types";
 import { PERSON_1, PERSON_2 } from "@/lib/person";
+import DateInput from "@/components/DateInput";
 
 const CONFIDENCE_COLOR: Record<string, string> = {
   alta: "bg-brand-100 text-brand-700",
@@ -82,8 +83,7 @@ export default function ReviewTable({
           />
 
           <div className="grid grid-cols-2 gap-2">
-            <input
-              type="date"
+            <DateInput
               value={d.date}
               onChange={(e) => onChange(i, { date: e.target.value })}
               className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm"

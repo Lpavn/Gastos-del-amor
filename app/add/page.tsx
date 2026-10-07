@@ -7,6 +7,7 @@ import { Category, DraftTransaction } from "@/lib/types";
 import { PERSON_1, PERSON_2, getCurrentPerson } from "@/lib/person";
 import { normalizeMerchantKey } from "@/lib/merchantKey";
 import ReviewTable from "@/components/ReviewTable";
+import DateInput from "@/components/DateInput";
 
 // Cuánto puede variar la fecha entre lo que dice la imagen y lo que ya está
 // guardado y seguir considerándose "el mismo movimiento" (ej. si al corregir
@@ -447,8 +448,7 @@ export default function AddPage() {
                     Poné acá el día que pagaste la tarjeta para cargarlos todos con esa fecha.
                   </p>
                   <div className="flex gap-2">
-                    <input
-                      type="date"
+                    <DateInput
                       value={payDate}
                       onChange={(e) => setPayDate(e.target.value)}
                       className="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
@@ -535,8 +535,7 @@ export default function AddPage() {
             className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
           />
           <div className="grid grid-cols-2 gap-2">
-            <input
-              type="date"
+            <DateInput
               value={manual.date}
               onChange={(e) => setManual({ ...manual, date: e.target.value })}
               className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"

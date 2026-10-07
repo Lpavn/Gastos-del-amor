@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Category, Transaction } from "@/lib/types";
 import { PERSON_1, PERSON_2 } from "@/lib/person";
 import { normalizeMerchantKey } from "@/lib/merchantKey";
+import DateInput from "@/components/DateInput";
 
 export default function EditTransactionModal({
   transaction,
@@ -136,8 +137,7 @@ export default function EditTransactionModal({
             className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
           />
           <div className="grid grid-cols-2 gap-2">
-            <input
-              type="date"
+            <DateInput
               value={form.date}
               onChange={(e) => setForm({ ...form, date: e.target.value })}
               className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
