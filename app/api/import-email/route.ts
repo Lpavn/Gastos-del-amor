@@ -18,7 +18,7 @@ const categoryNames = DEFAULT_CATEGORIES.map((c) => c.name);
 // espacios o guiones distintos en cómo cada mail escribe el mismo CBU/alias.
 function normalizeAliasForMatch(raw: string | null | undefined): string {
   if (!raw) return "";
-  return raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return raw.normalize("NFD").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 const internalTransferAliases = new Set(
@@ -27,6 +27,18 @@ const internalTransferAliases = new Set(
     .map((a) => normalizeAliasForMatch(a))
     .filter(Boolean)
 );
+
+// La IA a veces confunde la dirección de una transferencia, así que si el
+// mail lo dice explícitamente ("Enviaste"/"Recibiste") eso manda. Se mira
+// primero el asunto y después el texto; si son ambiguos queda lo de la IA.
+const SENT_RE = /enviaste|transferiste|realizaste una transferencia|pagaste/i;
+const RECEIVED_RE = /recibiste|te (transfiri|envi|acredit)/i;
+function directionFrom(s: string | undefined): "expense" | "income" | null {
+  const sent = SENT_RE.test(s || "");
+  const received = RECEIVED_RE.test(s || "");
+  if (sent === received) return null;
+  return sent ? "expense" : "income";
+}
 
 // Mismo criterio que parse-receipt, pero para texto de mail en vez de foto.
 // Además le pedimos a la IA que nos diga si el mail describe realmente un
@@ -213,7 +225,12 @@ export async function POST(req: NextRequest) {
 
     const rows = parsed.transactions
       .filter((t: any) => {
-        if (internalTransferAliases.has(normalizeAliasForMatch(t.merchant_key))) {
+        // Solo la contraparte (destinatario/remitente), nunca el mail entero:
+        // el alias propio de quien envía aparece en todos sus mails. Se usa
+        // "contiene" y no igualdad porque la IA a veces devuelve
+        // "kiara.alias.mp" o el nombre completo.
+        const counterpart = normalizeAliasForMatch(t.merchant_key);
+        if ([...internalTransferAliases].some((a) => counterpart.includes(a))) {
           skippedInternalTransfer++;
           return false;
         }
@@ -232,7 +249,7 @@ export async function POST(req: NextRequest) {
         const rule = ruleFor(merchantKey);
         return {
           date: t.date,
-          type: t.type,
+          type: directionFrom(subject) ?? directionFrom(text) ?? t.type,
           amount: t.amount,
           description: rule?.display_name || t.description,
           category_id: rule?.category_id ?? categoryIdFor(t.category_name),
