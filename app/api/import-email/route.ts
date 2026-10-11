@@ -40,6 +40,16 @@ function directionFrom(s: string | undefined): "expense" | "income" | null {
   return sent ? "expense" : "income";
 }
 
+// Santander manda "Se realizó la siguiente transferencia a tu nombre" tanto
+// para enviadas como (probablemente) recibidas, y la IA lee "a tu nombre"
+// como recibida. Lo que no miente es el detalle: si muestra el CBU de
+// DESTINO, la plata salió; si muestra el CBU de ORIGEN, entró.
+function transferDirection(subject: string | undefined, text: string): "expense" | "income" | null {
+  if (/c[bv]u de destino/i.test(text)) return "expense";
+  if (/c[bv]u de origen/i.test(text)) return "income";
+  return directionFrom(subject) ?? directionFrom(text);
+}
+
 // Mismo criterio que parse-receipt, pero para texto de mail en vez de foto.
 // Además le pedimos a la IA que nos diga si el mail describe realmente un
 // movimiento de dinero, porque no todos los mails etiquetados lo son
@@ -249,7 +259,7 @@ export async function POST(req: NextRequest) {
         const rule = ruleFor(merchantKey);
         return {
           date: t.date,
-          type: directionFrom(subject) ?? directionFrom(text) ?? t.type,
+          type: transferDirection(subject, text) ?? t.type,
           amount: t.amount,
           description: rule?.display_name || t.description,
           category_id: rule?.category_id ?? categoryIdFor(t.category_name),
